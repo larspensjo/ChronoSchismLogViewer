@@ -131,6 +131,34 @@ impl DiffResult {
     }
 }
 
+pub struct HeckelDiffEngine;
+
+impl HeckelDiffEngine {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
 pub trait DiffEngineOperations: Send + Sync {
     fn compute_diff(&self, lines_a: &[String], lines_b: &[String]) -> DiffResult;
+}
+
+impl DiffEngineOperations for HeckelDiffEngine {
+    fn compute_diff(&self, _lines_a: &[String], _lines_b: &[String]) -> DiffResult {
+        todo!("Implement Heckel's Algorithm");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[should_panic]
+    fn test_compute_diff_panics_on_todo() {
+        let engine = HeckelDiffEngine::new();
+        let lines_a = vec!["a".to_string()];
+        let lines_b = vec!["b".to_string()];
+        engine.compute_diff(&lines_a, &lines_b);
+    }
 }
