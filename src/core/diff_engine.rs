@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DiffState {
     Added,
@@ -137,6 +139,25 @@ impl HeckelDiffEngine {
     pub fn new() -> Self {
         Self
     }
+
+    fn build_symbol_table<'a>(
+        lines_a: &'a [String],
+        lines_b: &'a [String],
+    ) -> HashMap<&'a str, (usize, usize)> {
+        let mut table: HashMap<&'a str, (usize, usize)> = HashMap::new();
+
+        for line in lines_a {
+            let entry = table.entry(line.as_str()).or_insert((0, 0));
+            entry.0 += 1;
+        }
+
+        for line in lines_b {
+            let entry = table.entry(line.as_str()).or_insert((0, 0));
+            entry.1 += 1;
+        }
+
+        table
+    }
 }
 
 pub trait DiffEngineOperations: Send + Sync {
@@ -144,8 +165,9 @@ pub trait DiffEngineOperations: Send + Sync {
 }
 
 impl DiffEngineOperations for HeckelDiffEngine {
-    fn compute_diff(&self, _lines_a: &[String], _lines_b: &[String]) -> DiffResult {
-        todo!("Implement Heckel's Algorithm");
+    fn compute_diff(&self, lines_a: &[String], lines_b: &[String]) -> DiffResult {
+        let _table = Self::build_symbol_table(lines_a, lines_b);
+        DiffResult::new(Vec::new())
     }
 }
 
@@ -154,11 +176,15 @@ mod tests {
     use super::*;
 
     #[test]
-    #[should_panic]
-    fn test_compute_diff_panics_on_todo() {
-        let engine = HeckelDiffEngine::new();
-        let lines_a = vec!["a".to_string()];
-        let lines_b = vec!["b".to_string()];
-        engine.compute_diff(&lines_a, &lines_b);
+    fn test_build_symbol_table() {
+        let lines_a = vec!["a".to_string(), "b".to_string(), "a".to_string()];
+        let lines_b = vec!["c".to_string(), "b".to_string()];
+
+        let table = HeckelDiffEngine::build_symbol_table(&lines_a, &lines_b);
+
+        assert_eq!(table.get("a"), Some(&(2, 0)));
+        assert_eq!(table.get("b"), Some(&(1, 1)));
+        assert_eq!(table.get("c"), Some(&(0, 1)));
+        assert_eq!(table.len(), 3);
     }
 }
