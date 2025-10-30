@@ -158,6 +158,26 @@ impl HeckelDiffEngine {
 
         table
     }
+
+    fn link_unique_anchors<'a>(
+        lines_a: &'a [String],
+        lines_b: &'a [String],
+        table: &HashMap<&'a str, (usize, usize)>,
+    ) -> (Vec<Option<usize>>, Vec<Option<usize>>) {
+        let mut oa: Vec<Option<usize>> = vec![None; lines_a.len()];
+        let mut na: Vec<Option<usize>> = vec![None; lines_b.len()];
+
+        for (i, line) in lines_a.iter().enumerate() {
+            if let Some((1, 1)) = table.get(line.as_str()) {
+                if let Some(j) = lines_b.iter().position(|l| l == line) {
+                    oa[i] = Some(j);
+                    na[j] = Some(i);
+                }
+            }
+        }
+
+        (oa, na)
+    }
 }
 
 pub trait DiffEngineOperations: Send + Sync {
@@ -166,7 +186,9 @@ pub trait DiffEngineOperations: Send + Sync {
 
 impl DiffEngineOperations for HeckelDiffEngine {
     fn compute_diff(&self, lines_a: &[String], lines_b: &[String]) -> DiffResult {
-        let _table = Self::build_symbol_table(lines_a, lines_b);
+        let table = Self::build_symbol_table(lines_a, lines_b);
+        let (_oa, _na) = Self::link_unique_anchors(lines_a, lines_b, &table);
+
         DiffResult::new(Vec::new())
     }
 }
@@ -186,5 +208,21 @@ mod tests {
         assert_eq!(table.get("b"), Some(&(1, 1)));
         assert_eq!(table.get("c"), Some(&(0, 1)));
         assert_eq!(table.len(), 3);
+    }
+
+    #[test]
+    fn test_unique_anchor_linking() {
+        let lines_a = vec!["alpha".to_string(), "beta".to_string(), "gamma".to_string()];
+        let lines_b = vec![
+            "delta".to_string(),
+            "beta".to_string(),
+            "epsilon".to_string(),
+        ];
+
+        let table = HeckelDiffEngine::build_symbol_table(&lines_a, &lines_b);
+        let (oa, na) = HeckelDiffEngine::link_unique_anchors(&lines_a, &lines_b, &table);
+
+        assert_eq!(oa, vec![None, Some(1), None]);
+        assert_eq!(na, vec![None, Some(1), None]);
     }
 }
