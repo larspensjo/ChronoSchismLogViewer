@@ -206,6 +206,219 @@ impl HeckelDiffEngine {
             }
         }
     }
+
+    fn build_diff_lines(
+        lines_a: &[String],
+        lines_b: &[String],
+        oa: &[Option<usize>],
+        na: &[Option<usize>],
+    ) -> (Vec<DiffLine>, Vec<MovedBlock>) {
+        let mut result_lines: Vec<DiffLine> = Vec::new();
+        let mut matched_info: Vec<(usize, usize, usize)> = Vec::new();
+
+        let mut processed_old = vec![false; lines_a.len()];
+        let mut i_ptr: usize = 0;
+
+        for j in 0..lines_b.len() {
+            let matched_old = na
+                .get(j)
+                .copied()
+                .flatten()
+                .filter(|&i| oa.get(i).copied().flatten() == Some(j) && !processed_old[i]);
+
+            if let Some(i_match) = matched_old {
+                // Emit deletions for old lines that occur before the matched index
+                while i_ptr < i_match {
+                    if processed_old[i_ptr] {
+                        i_ptr += 1;
+                        continue;
+                    }
+
+                    match oa[i_ptr] {
+                        Some(mapped_j) if mapped_j >= j => break,
+                        Some(mapped_j) if mapped_j < j => {
+                            processed_old[i_ptr] = true;
+                            i_ptr += 1;
+                        }
+                        _ => {
+                            result_lines.push(DiffLine::new(
+                                DiffState::Deleted,
+                                Some(LineContent::new(i_ptr + 1, lines_a[i_ptr].clone())),
+                                None,
+                            ));
+                            processed_old[i_ptr] = true;
+                            i_ptr += 1;
+                        }
+                    }
+                }
+
+                let line_index = result_lines.len();
+                result_lines.push(DiffLine::new(
+                    DiffState::Unchanged,
+                    Some(LineContent::new(i_match + 1, lines_a[i_match].clone())),
+                    Some(LineContent::new(j + 1, lines_b[j].clone())),
+                ));
+                matched_info.push((line_index, i_match, j));
+
+                processed_old[i_match] = true;
+                if i_ptr == i_match {
+                    i_ptr += 1;
+                }
+
+                while i_ptr < lines_a.len() && processed_old[i_ptr] {
+                    i_ptr += 1;
+                }
+            } else {
+                result_lines.push(DiffLine::new(
+                    DiffState::Added,
+                    None,
+                    Some(LineContent::new(j + 1, lines_b[j].clone())),
+                ));
+            }
+        }
+
+        // Emit deletions for any remaining old lines
+        while i_ptr < lines_a.len() {
+            if processed_old[i_ptr] {
+                i_ptr += 1;
+                continue;
+            }
+
+            result_lines.push(DiffLine::new(
+                DiffState::Deleted,
+                Some(LineContent::new(i_ptr + 1, lines_a[i_ptr].clone())),
+                None,
+            ));
+            processed_old[i_ptr] = true;
+            i_ptr += 1;
+        }
+
+        let moved_blocks = Self::classify_matched_lines(&mut result_lines, &matched_info);
+
+        (result_lines, moved_blocks)
+    }
+
+    fn classify_matched_lines(
+        lines: &mut [DiffLine],
+        matched_info: &[(usize, usize, usize)],
+    ) -> Vec<MovedBlock> {
+        if matched_info.is_empty() {
+            return Vec::new();
+        }
+
+        let sequence: Vec<usize> = matched_info
+            .iter()
+            .map(|(_, old_idx, _)| *old_idx)
+            .collect();
+        let lis_positions = Self::longest_increasing_subsequence_indices(&sequence);
+
+        let mut is_in_lis = vec![false; matched_info.len()];
+        for idx in lis_positions {
+            if let Some(flag) = is_in_lis.get_mut(idx) {
+                *flag = true;
+            }
+        }
+
+        let mut moved_blocks = Vec::new();
+        let mut current_block: Option<(usize, usize, usize, usize)> = None;
+
+        for (idx, (line_idx, old_idx, new_idx)) in matched_info.iter().enumerate() {
+            let line = &mut lines[*line_idx];
+            if is_in_lis[idx] {
+                line.state = DiffState::Unchanged;
+                line.moved_from = None;
+                line.moved_to = None;
+
+                if let Some((source_start, source_end, dest_start, dest_end)) = current_block.take()
+                {
+                    moved_blocks.push(MovedBlock::new(
+                        source_start,
+                        source_end,
+                        dest_start,
+                        dest_end,
+                    ));
+                }
+            } else {
+                line.state = DiffState::Moved;
+                line.moved_from = Some(old_idx + 1);
+                line.moved_to = Some(new_idx + 1);
+
+                let source_line = old_idx + 1;
+                let dest_line = new_idx + 1;
+
+                match current_block {
+                    Some((source_start, _, dest_start, _)) => {
+                        current_block = Some((source_start, source_line, dest_start, dest_line));
+                    }
+                    None => {
+                        current_block = Some((source_line, source_line, dest_line, dest_line));
+                    }
+                }
+            }
+        }
+
+        if let Some((source_start, source_end, dest_start, dest_end)) = current_block {
+            moved_blocks.push(MovedBlock::new(
+                source_start,
+                source_end,
+                dest_start,
+                dest_end,
+            ));
+        }
+
+        moved_blocks
+    }
+
+    fn longest_increasing_subsequence_indices(sequence: &[usize]) -> Vec<usize> {
+        if sequence.is_empty() {
+            return Vec::new();
+        }
+
+        let n = sequence.len();
+        let mut tail_indices = vec![0usize; n];
+        let mut predecessors: Vec<Option<usize>> = vec![None; n];
+        let mut length = 0usize;
+
+        for (i, &value) in sequence.iter().enumerate() {
+            let mut left = 0usize;
+            let mut right = length;
+
+            while left < right {
+                let mid = (left + right) / 2;
+                if sequence[tail_indices[mid]] < value {
+                    left = mid + 1;
+                } else {
+                    right = mid;
+                }
+            }
+
+            if left > 0 {
+                predecessors[i] = Some(tail_indices[left - 1]);
+            }
+
+            tail_indices[left] = i;
+            if left + 1 > length {
+                length = left + 1;
+            }
+        }
+
+        if length == 0 {
+            return Vec::new();
+        }
+
+        let mut lis_indices = Vec::with_capacity(length);
+        let mut k = tail_indices[length - 1];
+        loop {
+            lis_indices.push(k);
+            if let Some(prev) = predecessors[k] {
+                k = prev;
+            } else {
+                break;
+            }
+        }
+        lis_indices.reverse();
+        lis_indices
+    }
 }
 
 pub trait DiffEngineOperations: Send + Sync {
@@ -217,8 +430,9 @@ impl DiffEngineOperations for HeckelDiffEngine {
         let table = Self::build_symbol_table(lines_a, lines_b);
         let (mut oa, mut na) = Self::link_unique_anchors(lines_a, lines_b, &table);
         Self::link_non_unique_matches(lines_a, lines_b, &table, &mut oa, &mut na);
+        let (lines, moved_blocks) = Self::build_diff_lines(lines_a, lines_b, &oa, &na);
 
-        DiffResult::new(Vec::new())
+        DiffResult::with_moved_blocks(lines, moved_blocks)
     }
 }
 
@@ -266,5 +480,82 @@ mod tests {
 
         assert_eq!(oa, vec![Some(0), Some(2), Some(1)]);
         assert_eq!(na, vec![Some(0), Some(2), Some(1)]);
+    }
+
+    #[test]
+    fn test_unchanged_lines() {
+        let engine = HeckelDiffEngine::new();
+        let lines_a = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let lines_b = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+
+        let result = engine.compute_diff(&lines_a, &lines_b);
+
+        assert_eq!(result.lines.len(), 3);
+        assert!(
+            result
+                .lines
+                .iter()
+                .all(|line| line.state == DiffState::Unchanged)
+        );
+        assert_eq!(result.statistics.unchanged, 3);
+        assert_eq!(result.statistics.total_changes(), 0);
+        assert!(result.moved_blocks.is_empty());
+    }
+
+    #[test]
+    fn test_simple_addition() {
+        let engine = HeckelDiffEngine::new();
+        let lines_a = vec!["a".to_string(), "c".to_string()];
+        let lines_b = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+
+        let result = engine.compute_diff(&lines_a, &lines_b);
+
+        assert_eq!(result.statistics.additions, 1);
+        assert_eq!(result.statistics.unchanged, 2);
+        assert_eq!(result.lines[1].state, DiffState::Added);
+        assert_eq!(
+            result.lines[1].right.as_ref().map(|c| c.text.as_str()),
+            Some("b")
+        );
+    }
+
+    #[test]
+    fn test_simple_deletion() {
+        let engine = HeckelDiffEngine::new();
+        let lines_a = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let lines_b = vec!["a".to_string(), "c".to_string()];
+
+        let result = engine.compute_diff(&lines_a, &lines_b);
+
+        assert_eq!(result.statistics.deletions, 1);
+        assert_eq!(result.statistics.unchanged, 2);
+        assert_eq!(result.lines[1].state, DiffState::Deleted);
+        assert_eq!(
+            result.lines[1].left.as_ref().map(|c| c.text.as_str()),
+            Some("b")
+        );
+    }
+
+    #[test]
+    fn test_simple_move() {
+        let engine = HeckelDiffEngine::new();
+        let lines_a = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let lines_b = vec!["c".to_string(), "a".to_string(), "b".to_string()];
+
+        let result = engine.compute_diff(&lines_a, &lines_b);
+
+        assert_eq!(result.statistics.additions, 0);
+        assert_eq!(result.statistics.deletions, 0);
+        assert!(result.statistics.moves >= 1);
+        assert!(
+            result
+                .lines
+                .iter()
+                .any(|line| line.state == DiffState::Moved)
+        );
+        assert!(
+            !result.moved_blocks.is_empty(),
+            "Expected at least one moved block"
+        );
     }
 }
