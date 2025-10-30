@@ -32,5 +32,5 @@ Here is a full set of initial requirements, following the format you requested.
 *   `[CSV-Tech-UnitTestsV1]` All core and application logic must be accompanied by a thorough suite of unit tests, using mock objects to isolate components.
 
 #### Software design requirements
-*   `[CSV-Tech-EncapsulationV1]` Structs shall keep their fields private to preserve encapsulation, except when the struct is intentionally used as a passive data container.
+*   `[CSV-Tech-EncapsulationV1]` Structs shall keep their fields private to preserve encapsulation, except when the struct is intentionally used as a passive data container. Avoid using naive getters and setters.
 *   `[CSV-Tech-TraceabilityV1]` Requirement identifiers shall appear in implementation comments and corresponding unit tests to aid traceability between code, tests, and documented requirements.

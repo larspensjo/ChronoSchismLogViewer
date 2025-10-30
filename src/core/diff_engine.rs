@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiffState {
     Added,
     Deleted,
@@ -10,8 +10,8 @@ pub enum DiffState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LineContent {
-    pub line_number: usize,
-    pub text: String,
+    line_number: usize,
+    text: String,
 }
 
 impl LineContent {
@@ -21,15 +21,24 @@ impl LineContent {
             text: text.into(),
         }
     }
+
+    // Accessors uphold [CSV-Tech-EncapsulationV1] & [CSV-Tech-TraceabilityV1].
+    pub fn line_number(&self) -> usize {
+        self.line_number
+    }
+
+    pub fn text(&self) -> &str {
+        &self.text
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiffLine {
-    pub state: DiffState,
-    pub left: Option<LineContent>,
-    pub right: Option<LineContent>,
-    pub moved_from: Option<usize>,
-    pub moved_to: Option<usize>,
+    state: DiffState,
+    left: Option<LineContent>,
+    right: Option<LineContent>,
+    moved_from: Option<usize>,
+    moved_to: Option<usize>,
 }
 
 impl DiffLine {
@@ -48,14 +57,34 @@ impl DiffLine {
         self.moved_to = moved_to;
         self
     }
+
+    pub fn state(&self) -> DiffState {
+        self.state.clone()
+    }
+
+    pub fn left(&self) -> Option<&LineContent> {
+        self.left.as_ref()
+    }
+
+    pub fn right(&self) -> Option<&LineContent> {
+        self.right.as_ref()
+    }
+
+    pub fn moved_from(&self) -> Option<usize> {
+        self.moved_from
+    }
+
+    pub fn moved_to(&self) -> Option<usize> {
+        self.moved_to
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DiffStatistics {
-    pub additions: usize,
-    pub deletions: usize,
-    pub moves: usize,
-    pub unchanged: usize,
+    additions: usize,
+    deletions: usize,
+    moves: usize,
+    unchanged: usize,
 }
 
 impl DiffStatistics {
@@ -76,14 +105,30 @@ impl DiffStatistics {
     pub fn total_changes(&self) -> usize {
         self.additions + self.deletions + self.moves
     }
+
+    pub fn additions(&self) -> usize {
+        self.additions
+    }
+
+    pub fn deletions(&self) -> usize {
+        self.deletions
+    }
+
+    pub fn moves(&self) -> usize {
+        self.moves
+    }
+
+    pub fn unchanged(&self) -> usize {
+        self.unchanged
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MovedBlock {
-    pub source_start: usize,
-    pub source_end: usize,
-    pub destination_start: usize,
-    pub destination_end: usize,
+    source_start: usize,
+    source_end: usize,
+    destination_start: usize,
+    destination_end: usize,
 }
 
 impl MovedBlock {
@@ -100,13 +145,29 @@ impl MovedBlock {
             destination_end,
         }
     }
+
+    pub fn source_start(&self) -> usize {
+        self.source_start
+    }
+
+    pub fn source_end(&self) -> usize {
+        self.source_end
+    }
+
+    pub fn destination_start(&self) -> usize {
+        self.destination_start
+    }
+
+    pub fn destination_end(&self) -> usize {
+        self.destination_end
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiffResult {
-    pub lines: Vec<DiffLine>,
-    pub statistics: DiffStatistics,
-    pub moved_blocks: Vec<MovedBlock>,
+    lines: Vec<DiffLine>,
+    statistics: DiffStatistics,
+    moved_blocks: Vec<MovedBlock>,
 }
 
 impl DiffResult {
@@ -130,6 +191,18 @@ impl DiffResult {
 
     pub fn is_empty(&self) -> bool {
         self.lines.is_empty()
+    }
+
+    pub fn lines(&self) -> &[DiffLine] {
+        &self.lines
+    }
+
+    pub fn statistics(&self) -> &DiffStatistics {
+        &self.statistics
+    }
+
+    pub fn moved_blocks(&self) -> &[MovedBlock] {
+        &self.moved_blocks
     }
 }
 
@@ -490,16 +563,17 @@ mod tests {
 
         let result = engine.compute_diff(&lines_a, &lines_b);
 
-        assert_eq!(result.lines.len(), 3);
+        // Validates [CSV-Tech-EncapsulationV1] accessor usage per [CSV-Tech-TraceabilityV1].
+        assert_eq!(result.lines().len(), 3);
         assert!(
             result
-                .lines
+                .lines()
                 .iter()
-                .all(|line| line.state == DiffState::Unchanged)
+                .all(|line| line.state() == DiffState::Unchanged)
         );
-        assert_eq!(result.statistics.unchanged, 3);
-        assert_eq!(result.statistics.total_changes(), 0);
-        assert!(result.moved_blocks.is_empty());
+        assert_eq!(result.statistics().unchanged(), 3);
+        assert_eq!(result.statistics().total_changes(), 0);
+        assert!(result.moved_blocks().is_empty());
     }
 
     #[test]
@@ -510,13 +584,10 @@ mod tests {
 
         let result = engine.compute_diff(&lines_a, &lines_b);
 
-        assert_eq!(result.statistics.additions, 1);
-        assert_eq!(result.statistics.unchanged, 2);
-        assert_eq!(result.lines[1].state, DiffState::Added);
-        assert_eq!(
-            result.lines[1].right.as_ref().map(|c| c.text.as_str()),
-            Some("b")
-        );
+        assert_eq!(result.statistics().additions(), 1);
+        assert_eq!(result.statistics().unchanged(), 2);
+        assert_eq!(result.lines()[1].state(), DiffState::Added);
+        assert_eq!(result.lines()[1].right().map(|c| c.text()), Some("b"));
     }
 
     #[test]
@@ -527,13 +598,10 @@ mod tests {
 
         let result = engine.compute_diff(&lines_a, &lines_b);
 
-        assert_eq!(result.statistics.deletions, 1);
-        assert_eq!(result.statistics.unchanged, 2);
-        assert_eq!(result.lines[1].state, DiffState::Deleted);
-        assert_eq!(
-            result.lines[1].left.as_ref().map(|c| c.text.as_str()),
-            Some("b")
-        );
+        assert_eq!(result.statistics().deletions(), 1);
+        assert_eq!(result.statistics().unchanged(), 2);
+        assert_eq!(result.lines()[1].state(), DiffState::Deleted);
+        assert_eq!(result.lines()[1].left().map(|c| c.text()), Some("b"));
     }
 
     #[test]
@@ -544,17 +612,17 @@ mod tests {
 
         let result = engine.compute_diff(&lines_a, &lines_b);
 
-        assert_eq!(result.statistics.additions, 0);
-        assert_eq!(result.statistics.deletions, 0);
-        assert!(result.statistics.moves >= 1);
+        assert_eq!(result.statistics().additions(), 0);
+        assert_eq!(result.statistics().deletions(), 0);
+        assert!(result.statistics().moves() >= 1);
         assert!(
             result
-                .lines
+                .lines()
                 .iter()
-                .any(|line| line.state == DiffState::Moved)
+                .any(|line| line.state() == DiffState::Moved)
         );
         assert!(
-            !result.moved_blocks.is_empty(),
+            !result.moved_blocks().is_empty(),
             "Expected at least one moved block"
         );
     }
