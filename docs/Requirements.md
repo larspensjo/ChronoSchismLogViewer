@@ -2,7 +2,7 @@
 
 Here is a full set of initial requirements, following the format you requested.
 
-#### Core Functionality
+#### Core Application Functionality
 *   `[CSV-Core-CompareV1]` The application must be able to load and compare two distinct log files.
 *   `[CSV-Core-IgnoreTSV1]` The comparison logic must be able to ignore differences that match a user-defined timestamp pattern.
 *   `[CSV-Core-TSPatternV1]` The application shall provide a mechanism for the user to define the timestamp pattern, preferably using regular expressions.
@@ -30,3 +30,7 @@ Here is a full set of initial requirements, following the format you requested.
 *   `[CSV-Tech-CommanDuctV1]` The user interface shall be implemented using the `CommanDuctUI` library, following its command-event pattern.
 *   `[CSV-Tech-DIV1]` The application's architecture must use Dependency Injection, with core logic abstracted behind traits, mirroring the `SourcePacker` reference.
 *   `[CSV-Tech-UnitTestsV1]` All core and application logic must be accompanied by a thorough suite of unit tests, using mock objects to isolate components.
+
+#### Software design requirements
+*   `[CSV-Tech-EncapsulationV1]` Structs shall keep their fields private to preserve encapsulation, except when the struct is intentionally used as a passive data container.
+*   `[CSV-Tech-TraceabilityV1]` Requirement identifiers shall appear in implementation comments and corresponding unit tests to aid traceability between code, tests, and documented requirements.
