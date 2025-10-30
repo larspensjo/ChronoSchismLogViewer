@@ -178,6 +178,34 @@ impl HeckelDiffEngine {
 
         (oa, na)
     }
+
+    fn link_non_unique_matches<'a>(
+        lines_a: &'a [String],
+        lines_b: &'a [String],
+        table: &HashMap<&'a str, (usize, usize)>,
+        oa: &mut [Option<usize>],
+        na: &mut [Option<usize>],
+    ) {
+        for (i, line_a) in lines_a.iter().enumerate() {
+            if oa[i].is_some() {
+                continue;
+            }
+
+            if let Some((count_a, count_b)) = table.get(line_a.as_str()) {
+                if *count_a == 0 || *count_b == 0 {
+                    continue;
+                }
+
+                for (j, line_b) in lines_b.iter().enumerate() {
+                    if na[j].is_none() && line_a == line_b {
+                        oa[i] = Some(j);
+                        na[j] = Some(i);
+                        break;
+                    }
+                }
+            }
+        }
+    }
 }
 
 pub trait DiffEngineOperations: Send + Sync {
@@ -187,7 +215,8 @@ pub trait DiffEngineOperations: Send + Sync {
 impl DiffEngineOperations for HeckelDiffEngine {
     fn compute_diff(&self, lines_a: &[String], lines_b: &[String]) -> DiffResult {
         let table = Self::build_symbol_table(lines_a, lines_b);
-        let (_oa, _na) = Self::link_unique_anchors(lines_a, lines_b, &table);
+        let (mut oa, mut na) = Self::link_unique_anchors(lines_a, lines_b, &table);
+        Self::link_non_unique_matches(lines_a, lines_b, &table, &mut oa, &mut na);
 
         DiffResult::new(Vec::new())
     }
@@ -224,5 +253,18 @@ mod tests {
 
         assert_eq!(oa, vec![None, Some(1), None]);
         assert_eq!(na, vec![None, Some(1), None]);
+    }
+
+    #[test]
+    fn test_non_unique_matches_are_linked() {
+        let lines_a = vec!["foo".to_string(), "bar".to_string(), "foo".to_string()];
+        let lines_b = vec!["foo".to_string(), "foo".to_string(), "bar".to_string()];
+
+        let table = HeckelDiffEngine::build_symbol_table(&lines_a, &lines_b);
+        let (mut oa, mut na) = HeckelDiffEngine::link_unique_anchors(&lines_a, &lines_b, &table);
+        HeckelDiffEngine::link_non_unique_matches(&lines_a, &lines_b, &table, &mut oa, &mut na);
+
+        assert_eq!(oa, vec![Some(0), Some(2), Some(1)]);
+        assert_eq!(na, vec![Some(0), Some(2), Some(1)]);
     }
 }
