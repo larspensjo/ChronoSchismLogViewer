@@ -1,6 +1,8 @@
 use regex::Regex;
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
+use std::sync::RwLock;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TimestampParserError {
@@ -46,11 +48,20 @@ pub trait TimestampParserOperations: Send + Sync {
     ) -> Result<Vec<String>, TimestampParserError>;
 }
 
-pub struct CoreTimestampParser;
+pub struct CoreTimestampParser {
+    cache: RwLock<HashMap<String, Regex>>,
+}
 
 impl CoreTimestampParser {
     pub fn new() -> Self {
-        Self
+        Self {
+            cache: RwLock::new(HashMap::new()),
+        }
+    }
+
+    #[cfg(test)]
+    fn cache_len(&self) -> usize {
+        self.cache.read().unwrap().len()
     }
 }
 
@@ -64,8 +75,16 @@ impl TimestampParserOperations for CoreTimestampParser {
             return Ok(lines.to_vec());
         }
 
-        let regex = Regex::new(pattern)
-            .map_err(|e| TimestampParserError::invalid_pattern(pattern, e.to_string()))?;
+        let regex = {
+            if let Some(cached) = self.cache.read().unwrap().get(pattern) {
+                cached.clone()
+            } else {
+                let compiled = Regex::new(pattern)
+                    .map_err(|e| TimestampParserError::invalid_pattern(pattern, e.to_string()))?;
+                let mut cache = self.cache.write().unwrap();
+                cache.entry(pattern.to_string()).or_insert(compiled).clone()
+            }
+        };
 
         let stripped_lines = lines
             .iter()
@@ -122,6 +141,7 @@ mod tests {
         let result = parser.strip_timestamps(&lines, "").unwrap();
 
         assert_eq!(result, lines);
+        assert_eq!(parser.cache_len(), 0);
     }
 
     #[test]
@@ -133,5 +153,33 @@ mod tests {
         let result = parser.strip_timestamps(&lines, pattern).unwrap();
 
         assert_eq!(result, lines);
+        assert_eq!(parser.cache_len(), 1);
+    }
+
+    #[test]
+    fn test_regex_is_cached_after_first_use() {
+        let parser = CoreTimestampParser::new();
+        let lines = vec![
+            "[10:00] entry".to_string(),
+            "[10:01] another".to_string(),
+            "no timestamp".to_string(),
+        ];
+        let pattern = r"\[\d{2}:\d{2}\] ";
+
+        let result_one = parser.strip_timestamps(&lines, pattern).unwrap();
+        assert_eq!(parser.cache_len(), 1);
+
+        let result_two = parser.strip_timestamps(&lines, pattern).unwrap();
+        assert_eq!(parser.cache_len(), 1, "pattern should remain cached");
+        assert_eq!(result_one, result_two);
+    }
+
+    #[test]
+    fn test_invalid_pattern_does_not_pollute_cache() {
+        let parser = CoreTimestampParser::new();
+        let lines = vec!["entry".to_string()];
+
+        assert!(parser.strip_timestamps(&lines, "[").is_err());
+        assert_eq!(parser.cache_len(), 0);
     }
 }

@@ -6,6 +6,7 @@ Here is a full set of initial requirements, following the format you requested.
 *   `[CSV-Core-CompareV1]` The application must be able to load and compare two distinct log files.
 *   `[CSV-Core-IgnoreTSV1]` The comparison logic must be able to ignore differences that match a user-defined timestamp pattern.
 *   `[CSV-Core-TSPatternV1]` The application shall provide a mechanism for the user to define the timestamp pattern, preferably using regular expressions.
+*   `[CSV-Core-RegexCacheV1]` The timestamp parsing logic shall cache compiled regular expressions so repeated use of the same pattern avoids recompilation overhead.
 *   `[CSV-Core-LargeFileV1]` The application should handle large log files gracefully, without freezing the UI during file loading or comparison.
 
 #### Diff Algorithm
