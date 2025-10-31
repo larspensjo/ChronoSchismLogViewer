@@ -1,0 +1,12 @@
+[2025-11-15 10:01:15.202] INFO: Application starting up...
+[2025-11-15 10:01:15.341] INFO: Reading configuration from 'config.xml'.
+[2025-11-15 10:01:16.400] INFO: Attempting to connect to database at 'db.prod.server'.
+[2025-11-15 10:01:16.980] INFO: Database connection successful.
+[2025-11-15 10:01:17.200] INFO: Initializing Authentication module.
+[2025-11-15 10:01:17.550] INFO: Using modern 'OAUTH2' authentication provider.
+[2025-11-15 10:01:18.215] INFO: Initializing Cache Service.
+[2025-11-15 10:01:18.218] DEBUG: Cache size set to 1024MB.
+[2025-11-15 10:01:18.540] INFO: Initializing Messaging Service.
+[2025-11-15 10:01:19.300] INFO: Application is ready to accept connections.
+[2025-11-15 10:01:20.255] ERROR: Failed to process message ID 67890: Invalid payload.
+[2025-11-15 10:01:21.100] INFO: Shutting down.

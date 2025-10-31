@@ -1,0 +1,12 @@
+[2025-11-15 10:00:00.101] INFO: Application starting up...
+[2025-11-15 10:00:00.255] INFO: Reading configuration from 'config.xml'.
+[2025-11-15 10:00:01.300] INFO: Attempting to connect to database at 'db.prod.server'.
+[2025-11-15 10:00:01.850] INFO: Database connection successful.
+[2025-11-15 10:00:02.110] INFO: Initializing Cache Service.
+[2025-11-15 10:00:02.112] DEBUG: Cache size set to 1024MB.
+[2025-11-15 10:00:02.430] INFO: Initializing Messaging Service.
+[2025-11-15 10:00:03.500] INFO: Initializing Authentication module.
+[2025-11-15 10:00:03.900] WARN: Authentication provider 'LDAP' is deprecated.
+[2025-11-15 10:00:04.200] INFO: Application is ready to accept connections.
+[2025-11-15 10:00:05.150] ERROR: Failed to process message ID 12345.
+[2025-11-15 10:00:06.000] INFO: Shutting down.
