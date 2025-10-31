@@ -3,9 +3,24 @@ name = "ChronoSchismLogViewer"
 version = "0.1.0"
 edition = "2024"
 
+[workspace]
+members = [
+    ".", # The root package (source_packer) is a member
+    "src/CommanDuctUI",
+]
+
 [dependencies]
 commanductui = { path = "src/CommanDuctUI" }
 regex = "1.10.5"
+
+[profile.dev]
+opt-level = 0
+debug = true
+debug-assertions = true
+overflow-checks = true
+lto = false
+codegen-units = 256 # Setting this to a higher number can improve dev build times
+incremental = true  # 'false' is unusual for dev, 'true' is the default and faster
 
 [dev-dependencies]
 tempfile = "3.10.1"
