@@ -93,12 +93,12 @@ This phase wires everything together into a runnable application.
 
 1.  **Describe the UI Layout (`[CSV-UI-SideBySideV1]`):**
     *   In `ui_description_layer.rs`, create a `build_main_window_layout` function.
-    *   It will return a `Vec<PlatformCommand>` defining:
-        *   A `CreateMainMenu` command with "File" > "Open Left File...", "Open Right File...".
-        *   `CreatePanel` commands to set up the main layout containers.
-        *   An `CreateInput` for the timestamp regex (`[CSV-UI-TimestampInputV1]`).
-        *   Two large, read-only, multi-line `CreateInput` controls to act as the left and right viewer panels.
-        *   A `DefineLayout` command with `LayoutRule`s to position everything (e.g., regex input at the top, viewers filling the rest side-by-side).
+    *   It will return a `Vec<PlatformCommand>` that defines the full static UI:
+        *   A `CreateMainMenu` command with "File" > "Open Left File..." and "Open Right File..." menu items, wired to new `MenuAction`s.
+        *   `CreatePanel` commands to set up the main layout containers (e.g., a top panel for inputs, a main panel for viewers).
+        *   A single-line `CreateInput` control for the timestamp regex pattern (`[CSV-UI-TimestampInputV1]`).
+        *   Two large, read-only, multi-line `CreateInput` controls to serve as the "left" and "right" log file viewers.
+        *   A `DefineLayout` command with `LayoutRule`s to position everything (e.g., regex input at the top, viewers side-by-side filling the remaining space).
 
 2.  **Create the Entry Point:**
     *   In `main.rs`, write the `main` function. It will be very similar to `SourcePacker`'s:
@@ -131,3 +131,8 @@ Now, build upon the working foundation to implement the more advanced visual fea
     *   This is the most visually complex feature. During your `WM_PAINT` handling in the custom `DiffView` control, after drawing the text lines, iterate through the moved blocks identified in your `DiffResult`.
     *   For each moved block, get the screen coordinates of its original position in one panel and its new position in the other.
     *   Use GDI functions (e.g., `MoveToEx`, `LineTo`, or `Polygon`) to draw connecting lines or semi-transparent polygons between these two areas.
+
+4.  **Implement Debouncing for Timestamp Input:**
+    *   Enhance the `AppLogic` to handle `AppEvent::InputTextChanged` from the timestamp regex control.
+    *   Instead of validating immediately, start a short platform timer. If another text change event arrives, reset the timer.
+    *   When the timer fires, validate the regex pattern. This prevents showing error popups while the user is actively typing, dramatically improving the user experience.
