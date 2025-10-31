@@ -14,7 +14,7 @@ use crate::core::{
 };
 use commanductui::types::{
     AppEvent, ControlId, MenuActionId, MessageSeverity, PlatformCommand, PlatformEventHandler,
-    WindowId,
+    TreeItemId, UiStateProvider, WindowId,
 };
 
 const LOG_FILE_DIALOG_FILTER: &str = concat!(
@@ -242,6 +242,12 @@ impl PlatformEventHandler for AppLogic {
 
     fn try_dequeue_command(&mut self) -> Option<PlatformCommand> {
         self.pending_commands.pop_front()
+    }
+}
+
+impl UiStateProvider for AppLogic {
+    fn is_tree_item_new(&self, _window_id: WindowId, _item_id: TreeItemId) -> bool {
+        false
     }
 }
 
