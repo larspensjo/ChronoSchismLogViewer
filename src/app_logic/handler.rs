@@ -12,10 +12,12 @@ use crate::core::{
     DiffEngineOperations, DiffLine, DiffState, LineContent, TimestampParserError,
     TimestampParserOperations,
 };
+use commanductui::StyleId;
 use commanductui::types::{
     AppEvent, ControlId, MenuActionId, MessageSeverity, PlatformCommand, PlatformEventHandler,
     TreeItemId, UiStateProvider, WindowId,
 };
+use regex::Regex;
 
 const LOG_FILE_DIALOG_FILTER: &str = concat!(
     "Log Files (*.log; *.txt)\0*.log;*.txt\0",
@@ -39,6 +41,7 @@ pub struct AppLogic {
     pending_commands: VecDeque<PlatformCommand>,
     active_window: Option<WindowId>,
     pending_file_dialog: Option<PendingFileDialog>,
+    timestamp_pattern_is_valid: bool,
 }
 
 impl AppLogic {
@@ -57,6 +60,7 @@ impl AppLogic {
             pending_commands: VecDeque::new(),
             active_window: None,
             pending_file_dialog: None,
+            timestamp_pattern_is_valid: true,
         }
     }
 
@@ -120,10 +124,17 @@ impl AppLogic {
         }
 
         self.timestamp_pattern = text;
-        self.trigger_diff_if_ready();
+        let is_valid = self.validate_timestamp_pattern();
+        if is_valid {
+            self.trigger_diff_if_ready();
+        }
     }
 
     fn trigger_diff_if_ready(&mut self) {
+        if !self.timestamp_pattern_is_valid {
+            return;
+        }
+
         let Some(window_id) = self.active_window else {
             return;
         };
@@ -215,6 +226,30 @@ impl AppLogic {
             PendingFileDialog::Left => self.left_file_path.as_ref(),
             PendingFileDialog::Right => self.right_file_path.as_ref(),
         }
+    }
+
+    fn validate_timestamp_pattern(&mut self) -> bool {
+        let pattern = self.timestamp_pattern.clone();
+        let is_valid = pattern.is_empty() || Regex::new(&pattern).is_ok();
+
+        if is_valid != self.timestamp_pattern_is_valid {
+            self.timestamp_pattern_is_valid = is_valid;
+            if let Some(window_id) = self.active_window {
+                // [CSV-UX-TimestampFeedbackV1] Keep the input styled to reflect regex validity.
+                let style_id = if is_valid {
+                    StyleId::DefaultInput
+                } else {
+                    StyleId::DefaultInputError
+                };
+                self.enqueue_command(PlatformCommand::ApplyStyleToControl {
+                    window_id,
+                    control_id: CONTROL_ID_TIMESTAMP_INPUT,
+                    style_id,
+                });
+            }
+        }
+
+        is_valid
     }
 }
 

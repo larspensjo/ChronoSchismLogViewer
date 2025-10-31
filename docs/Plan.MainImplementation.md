@@ -132,7 +132,13 @@ Now, build upon the working foundation to implement the more advanced visual fea
     *   For each moved block, get the screen coordinates of its original position in one panel and its new position in the other.
     *   Use GDI functions (e.g., `MoveToEx`, `LineTo`, or `Polygon`) to draw connecting lines or semi-transparent polygons between these two areas.
 
-4.  **Implement Debouncing for Timestamp Input:**
-    *   Enhance the `AppLogic` to handle `AppEvent::InputTextChanged` from the timestamp regex control.
-    *   Instead of validating immediately, start a short platform timer. If another text change event arrives, reset the timer.
-    *   When the timer fires, validate the regex pattern. This prevents showing error popups while the user is actively typing, dramatically improving the user experience.
+4.  **Implement Live Validation and Debounced Diffing for Timestamp Input:**
+    *   The application will provide immediate, non-intrusive feedback on the validity of the timestamp regular expression.
+    *   **On every `InputTextChanged` event from the timestamp control:**
+        1.  The `AppLogic` will immediately try to compile the regex pattern.
+        2.  If it fails, a `PlatformCommand::ApplyStyleToControl` is sent to give the input field an "error" background color.
+        3.  If it succeeds, a command is sent to restore the input field's default background color.
+    *   **To manage performance, the expensive re-diffing operation will be debounced:**
+        1.  On every `InputTextChanged` event, the `AppLogic` will also start or reset a short platform timer (e.g., 300ms).
+        2.  When the timer fires, the `AppLogic` checks if the *current* regex is valid.
+        3.  If it is, it proceeds with the full diffing workflow: stripping timestamps with the new pattern, re-computing the diff, and updating the viewer controls. the new pattern, re-computing the diff, and updating the viewer controls.

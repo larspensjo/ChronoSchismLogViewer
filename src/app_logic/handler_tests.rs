@@ -2,14 +2,14 @@
 mod tests {
     use crate::app_logic::handler::AppLogic;
     use crate::app_logic::ids::{
-        CONTROL_ID_LEFT_VIEWER, CONTROL_ID_RIGHT_VIEWER, MENU_ACTION_OPEN_LEFT,
-        MENU_ACTION_OPEN_RIGHT,
+        CONTROL_ID_LEFT_VIEWER, CONTROL_ID_RIGHT_VIEWER, CONTROL_ID_TIMESTAMP_INPUT,
+        MENU_ACTION_OPEN_LEFT, MENU_ACTION_OPEN_RIGHT,
     };
     use crate::core::{
         DiffEngineOperations, DiffLine, DiffState, LineContent, TimestampParserOperations,
     };
-    use commanductui::PlatformEventHandler;
     use commanductui::types::{AppEvent, PlatformCommand, WindowId};
+    use commanductui::{PlatformEventHandler, StyleId};
     use std::fs::File;
     use std::io::Write;
     use std::path::PathBuf;
@@ -197,6 +197,131 @@ mod tests {
                 vec!["right-alpha".into(), "right-beta".into()]
             )
         );
+    }
+
+    #[test]
+    fn invalid_regex_applies_error_style_and_blocks_diff_until_valid() {
+        let diff_lines = vec![DiffLine::new(
+            DiffState::Unchanged,
+            Some(LineContent::new(1, "alpha")),
+            Some(LineContent::new(1, "alpha")),
+        )];
+        let mock_diff_engine = Arc::new(MockDiffEngine::new(diff_lines));
+        let mock_timestamp_parser = Arc::new(MockTimestampParser::default());
+
+        let diff_engine: Arc<dyn DiffEngineOperations> = mock_diff_engine.clone();
+        let timestamp_parser: Arc<dyn TimestampParserOperations> = mock_timestamp_parser.clone();
+        let mut app_logic = AppLogic::new(diff_engine, timestamp_parser);
+
+        let window_id = WindowId::new(42);
+        app_logic.handle_event(AppEvent::MainWindowUISetupComplete { window_id });
+
+        // Invalid pattern should mark control with error style and skip diffing
+        app_logic.handle_event(AppEvent::InputTextChanged {
+            window_id,
+            control_id: CONTROL_ID_TIMESTAMP_INPUT,
+            text: "[".to_string(),
+        });
+
+        let command = app_logic
+            .try_dequeue_command()
+            .expect("expected style command for invalid regex");
+        match command {
+            PlatformCommand::ApplyStyleToControl {
+                window_id: cmd_window,
+                control_id,
+                style_id,
+            } => {
+                assert_eq!(cmd_window, window_id);
+                assert_eq!(control_id, CONTROL_ID_TIMESTAMP_INPUT);
+                assert_eq!(style_id, StyleId::DefaultInputError);
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+        assert!(
+            app_logic.try_dequeue_command().is_none(),
+            "no diff commands expected for invalid pattern"
+        );
+
+        let (_temp_dir, left_path, right_path) = create_test_files();
+
+        // Load files - diff should be withheld because pattern invalid
+        app_logic.handle_event(AppEvent::MenuActionClicked {
+            action_id: MENU_ACTION_OPEN_LEFT,
+        });
+        // Drain ShowOpenFileDialog command
+        let _ = app_logic.try_dequeue_command();
+        app_logic.handle_event(AppEvent::FileOpenProfileDialogCompleted {
+            window_id,
+            result: Some(left_path.clone()),
+        });
+        assert!(app_logic.try_dequeue_command().is_none());
+
+        app_logic.handle_event(AppEvent::MenuActionClicked {
+            action_id: MENU_ACTION_OPEN_RIGHT,
+        });
+        let _ = app_logic.try_dequeue_command();
+        app_logic.handle_event(AppEvent::FileOpenProfileDialogCompleted {
+            window_id,
+            result: Some(right_path.clone()),
+        });
+        assert!(
+            app_logic.try_dequeue_command().is_none(),
+            "still no diff commands while pattern invalid"
+        );
+
+        // Provide valid pattern -> style resets and diff executes
+        app_logic.handle_event(AppEvent::InputTextChanged {
+            window_id,
+            control_id: CONTROL_ID_TIMESTAMP_INPUT,
+            text: ".*".to_string(),
+        });
+
+        let restore_style = app_logic
+            .try_dequeue_command()
+            .expect("expected style reset command");
+        match restore_style {
+            PlatformCommand::ApplyStyleToControl {
+                window_id: cmd_window,
+                control_id,
+                style_id,
+            } => {
+                assert_eq!(cmd_window, window_id);
+                assert_eq!(control_id, CONTROL_ID_TIMESTAMP_INPUT);
+                assert_eq!(style_id, StyleId::DefaultInput);
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+
+        let diff_calls = mock_diff_engine.calls();
+        assert_eq!(
+            diff_calls.len(),
+            1,
+            "diff engine should run once after valid regex"
+        );
+
+        // Diff commands follow
+        let left_update = app_logic
+            .try_dequeue_command()
+            .expect("expected left viewer update after valid regex");
+        let right_update = app_logic
+            .try_dequeue_command()
+            .expect("expected right viewer update after valid regex");
+
+        assert!(matches!(
+            left_update,
+            PlatformCommand::SetViewerContent {
+                control_id: CONTROL_ID_LEFT_VIEWER,
+                ..
+            }
+        ));
+        assert!(matches!(
+            right_update,
+            PlatformCommand::SetViewerContent {
+                control_id: CONTROL_ID_RIGHT_VIEWER,
+                ..
+            }
+        ));
     }
 
     fn create_test_files() -> (TempDir, PathBuf, PathBuf) {
