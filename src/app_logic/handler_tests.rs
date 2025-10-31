@@ -1,12 +1,15 @@
 #[cfg(test)]
 mod tests {
     use crate::app_logic::handler::AppLogic;
-    use crate::app_logic::ids::{CONTROL_ID_LEFT_VIEWER, CONTROL_ID_RIGHT_VIEWER};
+    use crate::app_logic::ids::{
+        CONTROL_ID_LEFT_VIEWER, CONTROL_ID_RIGHT_VIEWER, MENU_ACTION_OPEN_LEFT,
+        MENU_ACTION_OPEN_RIGHT,
+    };
     use crate::core::{
         DiffEngineOperations, DiffLine, DiffState, LineContent, TimestampParserOperations,
     };
-    use commanductui::types::{AppEvent, MenuAction, PlatformCommand, WindowId};
     use commanductui::PlatformEventHandler;
+    use commanductui::types::{AppEvent, PlatformCommand, WindowId};
     use std::fs::File;
     use std::io::Write;
     use std::path::PathBuf;
@@ -87,7 +90,7 @@ mod tests {
 
         // Act: open left file
         app_logic.handle_event(AppEvent::MenuActionClicked {
-            action: MenuAction::OpenLeftLogFile,
+            action_id: MENU_ACTION_OPEN_LEFT,
         });
 
         let open_left = app_logic
@@ -114,7 +117,7 @@ mod tests {
 
         // Act: open right file
         app_logic.handle_event(AppEvent::MenuActionClicked {
-            action: MenuAction::OpenRightLogFile,
+            action_id: MENU_ACTION_OPEN_RIGHT,
         });
         let open_right = app_logic
             .try_dequeue_command()

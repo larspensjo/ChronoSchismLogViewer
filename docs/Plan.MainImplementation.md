@@ -94,7 +94,7 @@ This phase wires everything together into a runnable application.
 1.  **Describe the UI Layout (`[CSV-UI-SideBySideV1]`):**
     *   In `ui_description_layer.rs`, create a `build_main_window_layout` function.
     *   It will return a `Vec<PlatformCommand>` that defines the full static UI:
-        *   A `CreateMainMenu` command with "File" > "Open Left File..." and "Open Right File..." menu items, wired to new `MenuAction`s.
+        *   A `CreateMainMenu` command with "File" > "Open Left File..." and "Open Right File..." menu items, wired to dedicated `MenuActionId` constants.
         *   `CreatePanel` commands to set up the main layout containers (e.g., a top panel for inputs, a main panel for viewers).
         *   A single-line `CreateInput` control for the timestamp regex pattern (`[CSV-UI-TimestampInputV1]`).
         *   Two large, read-only, multi-line `CreateInput` controls to serve as the "left" and "right" log file viewers.

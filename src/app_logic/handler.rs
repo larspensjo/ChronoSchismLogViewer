@@ -6,13 +6,14 @@ use std::sync::Arc;
 
 use crate::app_logic::ids::{
     CONTROL_ID_LEFT_VIEWER, CONTROL_ID_RIGHT_VIEWER, CONTROL_ID_TIMESTAMP_INPUT,
+    MENU_ACTION_OPEN_LEFT, MENU_ACTION_OPEN_RIGHT,
 };
 use crate::core::{
     DiffEngineOperations, DiffLine, DiffState, LineContent, TimestampParserError,
     TimestampParserOperations,
 };
 use commanductui::types::{
-    AppEvent, ControlId, MenuAction, MessageSeverity, PlatformCommand, PlatformEventHandler,
+    AppEvent, ControlId, MenuActionId, MessageSeverity, PlatformCommand, PlatformEventHandler,
     WindowId,
 };
 
@@ -63,11 +64,11 @@ impl AppLogic {
         self.pending_commands.push_back(command);
     }
 
-    fn handle_menu_action(&mut self, action: MenuAction) {
-        match action {
-            MenuAction::OpenLeftLogFile => self.request_open_file_dialog(PendingFileDialog::Left),
-            MenuAction::OpenRightLogFile => self.request_open_file_dialog(PendingFileDialog::Right),
-            _ => {}
+    fn handle_menu_action(&mut self, action_id: MenuActionId) {
+        if action_id == MENU_ACTION_OPEN_LEFT {
+            self.request_open_file_dialog(PendingFileDialog::Left);
+        } else if action_id == MENU_ACTION_OPEN_RIGHT {
+            self.request_open_file_dialog(PendingFileDialog::Right);
         }
     }
 
@@ -223,7 +224,7 @@ impl PlatformEventHandler for AppLogic {
             AppEvent::MainWindowUISetupComplete { window_id } => {
                 self.active_window = Some(window_id);
             }
-            AppEvent::MenuActionClicked { action } => self.handle_menu_action(action),
+            AppEvent::MenuActionClicked { action_id } => self.handle_menu_action(action_id),
             AppEvent::FileOpenProfileDialogCompleted { window_id, result } => {
                 self.handle_file_dialog_result(window_id, result)
             }
