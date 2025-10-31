@@ -6,3 +6,6 @@ edition = "2024"
 [dependencies]
 commanductui = { path = "src/CommanDuctUI" }
 regex = "1.10.5"
+
+[dev-dependencies]
+tempfile = "3.10.1"
