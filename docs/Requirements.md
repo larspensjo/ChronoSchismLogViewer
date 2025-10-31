@@ -1,6 +1,6 @@
 ### Requirement Specification for ChronoSchism Log Viewer
 
-Here is a full set of initial requirements, following the format you requested.
+All requirements have a unique tag, in the form `[NameVn]`, where 'Vn' is the version number. This number shall be increased any time the requirement changes.
 
 #### Core Application Functionality
 *   `[CSV-Core-CompareV1]` The application must be able to load and compare two distinct log files.
@@ -34,3 +34,4 @@ Here is a full set of initial requirements, following the format you requested.
 #### Software design requirements
 *   `[CSV-Tech-EncapsulationV1]` Structs shall keep their fields private to preserve encapsulation, except when the struct is intentionally used as a passive data container. Avoid using naive getters and setters.
 *   `[CSV-Tech-TraceabilityV1]` Requirement identifiers shall appear in implementation comments and corresponding unit tests to aid traceability between code, tests, and documented requirements.
+*   `[CSV-Tech-ModuleStyleV1]` The project must follow the modern Rust module structure, where a module's declaration is placed in a file named after the module (e.g., `src/core.rs`) rather than in a `mod.rs` file inside the module's directory (e.g., `src/core/mod.rs`).
