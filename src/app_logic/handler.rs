@@ -255,7 +255,7 @@ impl AppLogic {
         if is_valid != self.timestamp_pattern_is_valid {
             self.timestamp_pattern_is_valid = is_valid;
             if let Some(window_id) = self.active_window {
-                // [CSV-UX-TimestampFeedbackV1] Keep the input styled to reflect regex validity.
+                // [CSV-UX-TimestampFeedbackV2] Keep the input styled to reflect regex validity.
                 let style_id = if is_valid {
                     StyleId::DefaultInput
                 } else {

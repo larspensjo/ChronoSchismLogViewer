@@ -6,6 +6,7 @@ use crate::app_logic::ids::{
 use commanductui::types::{
     DockStyle, LabelClass, LayoutRule, MenuItemConfig, PlatformCommand, WindowId,
 };
+use commanductui::{Color, ControlStyle, StyleId};
 
 /// Builds the static command list that describes the main application window.
 /// This satisfies [CSV-UI-SideBySideV1] by defining the side-by-side viewer panels
@@ -31,6 +32,15 @@ pub fn build_main_window_layout(window_id: WindowId) -> Vec<PlatformCommand> {
     }];
 
     let mut commands = Vec::new();
+
+    commands.push(PlatformCommand::DefineStyle {
+        style_id: StyleId::DefaultInputError,
+        style: ControlStyle {
+            background_color: Some(Color { r: 0xB2, g: 0x1B, b: 0x1B }),
+            text_color: None,
+            font: None,
+        },
+    });
 
     commands.push(PlatformCommand::CreateMainMenu {
         window_id,

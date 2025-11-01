@@ -24,7 +24,7 @@ All requirements have a unique tag, in the form `[NameVn]`, where 'Vn' is the ve
 #### User Experience (UX)
 *   `[CSV-UX-LinkedScrollV1]` The vertical scroll bars of the two comparison panels must be linked, so that scrolling one panel scrolls the other in sync.
 *   `[CSV-UX-ResponsiveV1]` The application UI must remain responsive during file operations and diff calculations, making use of background processing where appropriate.
-*   `[CSV-UX-TimestampFeedbackV1]` The timestamp regex input shall show immediate validity feedback and only trigger diff recalculation after a short debounce when the pattern is valid.
+*   `[CSV-UX-TimestampFeedbackV2]` The timestamp regex input shall show immediate validity feedback with a red background whenever the pattern is invalid or incomplete, and only trigger diff recalculation after a short debounce when the pattern becomes valid.
 
 #### Technical Requirements
 *   `[CSV-Tech-RustV1]` The application shall be implemented in the Rust programming language.
