@@ -4,7 +4,7 @@ All requirements have a unique tag, in the form `[NameVn]`, where 'Vn' is the ve
 
 #### Core Application Functionality
 *   `[CSV-Core-CompareV1]` The application must be able to load and compare two distinct log files.
-*   `[CSV-Core-IgnoreTSV1]` The comparison logic must be able to ignore differences that match a user-defined timestamp pattern.
+*   `[CSV-Core-IgnoreTSV2]` The comparison logic must identify lines as `Unchanged` or `Moved` based on their content *after* a timestamp pattern is removed, but must display the full, original line content in the final result.
 *   `[CSV-Core-TSPatternV1]` The application shall provide a mechanism for the user to define the timestamp pattern, preferably using regular expressions.
 *   `[CSV-Core-RegexCacheV1]` The timestamp parsing logic shall cache compiled regular expressions so repeated use of the same pattern avoids recompilation overhead.
 *   `[CSV-Core-LargeFileV1]` The application should handle large log files gracefully, without freezing the UI during file loading or comparison.
@@ -31,6 +31,7 @@ All requirements have a unique tag, in the form `[NameVn]`, where 'Vn' is the ve
 *   `[CSV-Tech-CommanDuctV1]` The user interface shall be implemented using the `CommanDuctUI` library, following its command-event pattern.
 *   `[CSV-Tech-DIV1]` The application's architecture must use Dependency Injection, with core logic abstracted behind traits, mirroring the `SourcePacker` reference.
 *   `[CSV-Tech-UnitTestsV1]` All core and application logic must be accompanied by a thorough suite of unit tests, using mock objects to isolate components.
+*   `[CSV-Tech-DiffEngineV1]` The `DiffEngineOperations` trait must operate on a custom data structure (e.g., `ComparableLine`) that encapsulates both the original line text for display and a stripped-down version for comparison, enabling timestamp-agnostic diffing.
 
 #### Software design requirements
 *   `[CSV-Tech-EncapsulationV1]` Structs shall keep their fields private to preserve encapsulation, except when the struct is intentionally used as a passive data container. Avoid using naive getters and setters.

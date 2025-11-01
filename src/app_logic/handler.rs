@@ -9,7 +9,7 @@ use crate::app_logic::ids::{
     MENU_ACTION_OPEN_LEFT, MENU_ACTION_OPEN_RIGHT,
 };
 use crate::core::{
-    DiffEngineOperations, DiffLine, DiffState, LineContent, TimestampParserError,
+    ComparableLine, DiffEngineOperations, DiffLine, DiffState, LineContent, TimestampParserError,
     TimestampParserOperations,
 };
 use commanductui::StyleId;
@@ -176,10 +176,30 @@ impl AppLogic {
             .timestamp_parser
             .strip_timestamps(&right_lines, &self.timestamp_pattern)
             .map_err(DiffWorkflowError::Timestamp)?;
+        debug_assert_eq!(left_lines.len(), stripped_left.len());
+        debug_assert_eq!(right_lines.len(), stripped_right.len());
+
+        let comparable_left = Self::build_comparable_lines(&left_lines, &stripped_left);
+        let comparable_right = Self::build_comparable_lines(&right_lines, &stripped_right);
+
         let diff_result = self
             .diff_engine
-            .compute_diff(&stripped_left, &stripped_right);
+            .compute_diff(&comparable_left, &comparable_right);
         Ok(diff_result.lines().to_vec())
+    }
+
+    fn build_comparable_lines(
+        original: &[String],
+        stripped: &[String],
+    ) -> Vec<ComparableLine> {
+        debug_assert_eq!(original.len(), stripped.len());
+        original
+            .iter()
+            .zip(stripped.iter())
+            .map(|(original_text, comparable_text)| {
+                ComparableLine::new(original_text.clone(), comparable_text.clone())
+            })
+            .collect()
     }
 
     fn enqueue_diff_commands(&mut self, window_id: WindowId, lines: &[DiffLine]) {

@@ -6,10 +6,12 @@ mod tests {
         MENU_ACTION_OPEN_LEFT, MENU_ACTION_OPEN_RIGHT,
     };
     use crate::core::{
-        DiffEngineOperations, DiffLine, DiffState, LineContent, TimestampParserOperations,
+        ComparableLine, DiffEngineOperations, DiffLine, DiffState, LineContent,
+        TimestampParserOperations,
     };
     use commanductui::types::{AppEvent, PlatformCommand, WindowId};
     use commanductui::{PlatformEventHandler, StyleId};
+    use std::collections::VecDeque;
     use std::fs::File;
     use std::io::Write;
     use std::path::PathBuf;
@@ -19,11 +21,19 @@ mod tests {
     #[derive(Default)]
     struct MockTimestampParser {
         calls: Mutex<Vec<(Vec<String>, String)>>,
+        responses: Mutex<VecDeque<Vec<String>>>,
     }
 
     impl MockTimestampParser {
         fn calls(&self) -> Vec<(Vec<String>, String)> {
             self.calls.lock().unwrap().clone()
+        }
+
+        fn with_responses(responses: Vec<Vec<String>>) -> Self {
+            Self {
+                calls: Mutex::new(Vec::new()),
+                responses: Mutex::new(VecDeque::from(responses)),
+            }
         }
     }
 
@@ -33,14 +43,23 @@ mod tests {
             lines: &[String],
             pattern: &str,
         ) -> Result<Vec<String>, crate::core::TimestampParserError> {
-            let mut guard = self.calls.lock().unwrap();
-            guard.push((lines.to_vec(), pattern.to_string()));
-            Ok(lines.to_vec())
+            let captured_lines = lines.to_vec();
+            {
+                let mut guard = self.calls.lock().unwrap();
+                guard.push((captured_lines.clone(), pattern.to_string()));
+            }
+
+            let mut responses = self.responses.lock().unwrap();
+            if let Some(stripped) = responses.pop_front() {
+                Ok(stripped)
+            } else {
+                Ok(captured_lines)
+            }
         }
     }
 
     struct MockDiffEngine {
-        calls: Mutex<Vec<(Vec<String>, Vec<String>)>>,
+        calls: Mutex<Vec<(Vec<ComparableLine>, Vec<ComparableLine>)>>,
         lines_to_return: Vec<DiffLine>,
     }
 
@@ -52,17 +71,28 @@ mod tests {
             }
         }
 
-        fn calls(&self) -> Vec<(Vec<String>, Vec<String>)> {
+        fn calls(&self) -> Vec<(Vec<ComparableLine>, Vec<ComparableLine>)> {
             self.calls.lock().unwrap().clone()
         }
     }
 
     impl DiffEngineOperations for MockDiffEngine {
-        fn compute_diff(&self, lines_a: &[String], lines_b: &[String]) -> crate::core::DiffResult {
+        fn compute_diff(
+            &self,
+            lines_a: &[ComparableLine],
+            lines_b: &[ComparableLine],
+        ) -> crate::core::DiffResult {
             let mut guard = self.calls.lock().unwrap();
             guard.push((lines_a.to_vec(), lines_b.to_vec()));
             crate::core::DiffResult::new(self.lines_to_return.clone())
         }
+    }
+
+    fn snapshot(lines: &[ComparableLine]) -> Vec<(&str, &str)> {
+        lines
+            .iter()
+            .map(|line| (line.original_text.as_str(), line.comparable_text.as_str()))
+            .collect()
     }
 
     #[test]
@@ -77,7 +107,10 @@ mod tests {
             DiffLine::new(DiffState::Added, None, Some(LineContent::new(2, "beta"))),
         ];
         let mock_diff_engine = Arc::new(MockDiffEngine::new(diff_lines));
-        let mock_timestamp_parser = Arc::new(MockTimestampParser::default());
+        let mock_timestamp_parser = Arc::new(MockTimestampParser::with_responses(vec![
+            vec!["alpha".into(), "beta".into()],
+            vec!["alpha".into(), "beta".into()],
+        ]));
 
         let diff_engine: Arc<dyn DiffEngineOperations> = mock_diff_engine.clone();
         let timestamp_parser: Arc<dyn TimestampParserOperations> = mock_timestamp_parser.clone();
@@ -191,11 +224,12 @@ mod tests {
         let diff_calls = mock_diff_engine.calls();
         assert_eq!(diff_calls.len(), 1);
         assert_eq!(
-            diff_calls[0],
-            (
-                vec!["left-alpha".into(), "left-beta".into()],
-                vec!["right-alpha".into(), "right-beta".into()]
-            )
+            snapshot(&diff_calls[0].0),
+            vec![("left-alpha", "alpha"), ("left-beta", "beta")]
+        );
+        assert_eq!(
+            snapshot(&diff_calls[0].1),
+            vec![("right-alpha", "alpha"), ("right-beta", "beta")]
         );
     }
 

@@ -1,4 +1,34 @@
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+
+#[derive(Debug, Clone)]
+pub struct ComparableLine {
+    pub original_text: String,
+    pub comparable_text: String,
+}
+
+impl ComparableLine {
+    pub fn new(original_text: impl Into<String>, comparable_text: impl Into<String>) -> Self {
+        Self {
+            original_text: original_text.into(),
+            comparable_text: comparable_text.into(),
+        }
+    }
+}
+
+impl PartialEq for ComparableLine {
+    fn eq(&self, other: &Self) -> bool {
+        self.comparable_text == other.comparable_text
+    }
+}
+
+impl Eq for ComparableLine {}
+
+impl Hash for ComparableLine {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.comparable_text.hash(state);
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiffState {
@@ -214,18 +244,18 @@ impl HeckelDiffEngine {
     }
 
     fn build_symbol_table<'a>(
-        lines_a: &'a [String],
-        lines_b: &'a [String],
-    ) -> HashMap<&'a str, (usize, usize)> {
-        let mut table: HashMap<&'a str, (usize, usize)> = HashMap::new();
+        lines_a: &'a [ComparableLine],
+        lines_b: &'a [ComparableLine],
+    ) -> HashMap<&'a ComparableLine, (usize, usize)> {
+        let mut table: HashMap<&'a ComparableLine, (usize, usize)> = HashMap::new();
 
         for line in lines_a {
-            let entry = table.entry(line.as_str()).or_insert((0, 0));
+            let entry = table.entry(line).or_insert((0, 0));
             entry.0 += 1;
         }
 
         for line in lines_b {
-            let entry = table.entry(line.as_str()).or_insert((0, 0));
+            let entry = table.entry(line).or_insert((0, 0));
             entry.1 += 1;
         }
 
@@ -233,15 +263,15 @@ impl HeckelDiffEngine {
     }
 
     fn link_unique_anchors<'a>(
-        lines_a: &'a [String],
-        lines_b: &'a [String],
-        table: &HashMap<&'a str, (usize, usize)>,
+        lines_a: &'a [ComparableLine],
+        lines_b: &'a [ComparableLine],
+        table: &HashMap<&'a ComparableLine, (usize, usize)>,
     ) -> (Vec<Option<usize>>, Vec<Option<usize>>) {
         let mut oa: Vec<Option<usize>> = vec![None; lines_a.len()];
         let mut na: Vec<Option<usize>> = vec![None; lines_b.len()];
 
         for (i, line) in lines_a.iter().enumerate() {
-            if let Some((1, 1)) = table.get(line.as_str()) {
+            if let Some((1, 1)) = table.get(line) {
                 if let Some(j) = lines_b.iter().position(|l| l == line) {
                     oa[i] = Some(j);
                     na[j] = Some(i);
@@ -253,9 +283,9 @@ impl HeckelDiffEngine {
     }
 
     fn link_non_unique_matches<'a>(
-        lines_a: &'a [String],
-        lines_b: &'a [String],
-        table: &HashMap<&'a str, (usize, usize)>,
+        lines_a: &'a [ComparableLine],
+        lines_b: &'a [ComparableLine],
+        table: &HashMap<&'a ComparableLine, (usize, usize)>,
         oa: &mut [Option<usize>],
         na: &mut [Option<usize>],
     ) {
@@ -264,7 +294,7 @@ impl HeckelDiffEngine {
                 continue;
             }
 
-            if let Some((count_a, count_b)) = table.get(line_a.as_str()) {
+            if let Some((count_a, count_b)) = table.get(line_a) {
                 if *count_a == 0 || *count_b == 0 {
                     continue;
                 }
@@ -281,8 +311,8 @@ impl HeckelDiffEngine {
     }
 
     fn build_diff_lines(
-        lines_a: &[String],
-        lines_b: &[String],
+        lines_a: &[ComparableLine],
+        lines_b: &[ComparableLine],
         oa: &[Option<usize>],
         na: &[Option<usize>],
     ) -> (Vec<DiffLine>, Vec<MovedBlock>) {
@@ -316,7 +346,10 @@ impl HeckelDiffEngine {
                         _ => {
                             result_lines.push(DiffLine::new(
                                 DiffState::Deleted,
-                                Some(LineContent::new(i_ptr + 1, lines_a[i_ptr].clone())),
+                                Some(LineContent::new(
+                                    i_ptr + 1,
+                                    lines_a[i_ptr].original_text.clone(),
+                                )),
                                 None,
                             ));
                             processed_old[i_ptr] = true;
@@ -328,8 +361,11 @@ impl HeckelDiffEngine {
                 let line_index = result_lines.len();
                 result_lines.push(DiffLine::new(
                     DiffState::Unchanged,
-                    Some(LineContent::new(i_match + 1, lines_a[i_match].clone())),
-                    Some(LineContent::new(j + 1, lines_b[j].clone())),
+                    Some(LineContent::new(
+                        i_match + 1,
+                        lines_a[i_match].original_text.clone(),
+                    )),
+                    Some(LineContent::new(j + 1, lines_b[j].original_text.clone())),
                 ));
                 matched_info.push((line_index, i_match, j));
 
@@ -345,7 +381,7 @@ impl HeckelDiffEngine {
                 result_lines.push(DiffLine::new(
                     DiffState::Added,
                     None,
-                    Some(LineContent::new(j + 1, lines_b[j].clone())),
+                    Some(LineContent::new(j + 1, lines_b[j].original_text.clone())),
                 ));
             }
         }
@@ -359,7 +395,10 @@ impl HeckelDiffEngine {
 
             result_lines.push(DiffLine::new(
                 DiffState::Deleted,
-                Some(LineContent::new(i_ptr + 1, lines_a[i_ptr].clone())),
+                Some(LineContent::new(
+                    i_ptr + 1,
+                    lines_a[i_ptr].original_text.clone(),
+                )),
                 None,
             ));
             processed_old[i_ptr] = true;
@@ -495,11 +534,11 @@ impl HeckelDiffEngine {
 }
 
 pub trait DiffEngineOperations: Send + Sync {
-    fn compute_diff(&self, lines_a: &[String], lines_b: &[String]) -> DiffResult;
+    fn compute_diff(&self, lines_a: &[ComparableLine], lines_b: &[ComparableLine]) -> DiffResult;
 }
 
 impl DiffEngineOperations for HeckelDiffEngine {
-    fn compute_diff(&self, lines_a: &[String], lines_b: &[String]) -> DiffResult {
+    fn compute_diff(&self, lines_a: &[ComparableLine], lines_b: &[ComparableLine]) -> DiffResult {
         let table = Self::build_symbol_table(lines_a, lines_b);
         let (mut oa, mut na) = Self::link_unique_anchors(lines_a, lines_b, &table);
         Self::link_non_unique_matches(lines_a, lines_b, &table, &mut oa, &mut na);
@@ -513,27 +552,41 @@ impl DiffEngineOperations for HeckelDiffEngine {
 mod tests {
     use super::*;
 
+    fn same(text: &str) -> ComparableLine {
+        ComparableLine::new(text, text)
+    }
+
+    fn comparable(original: &str, stripped: &str) -> ComparableLine {
+        ComparableLine::new(original, stripped)
+    }
+
+    #[test]
+    fn comparable_line_equality_ignores_original_text() {
+        let line_a = comparable("[A] entry", "entry");
+        let line_b = comparable("[B] entry", "entry");
+        let line_c = comparable("[C] other", "other");
+
+        assert_eq!(line_a, line_b, "Comparable text should drive equality");
+        assert_ne!(line_a, line_c, "Different comparable text must not be equal");
+    }
+
     #[test]
     fn test_build_symbol_table() {
-        let lines_a = vec!["a".to_string(), "b".to_string(), "a".to_string()];
-        let lines_b = vec!["c".to_string(), "b".to_string()];
+        let lines_a = vec![same("a"), same("b"), same("a")];
+        let lines_b = vec![same("c"), same("b")];
 
         let table = HeckelDiffEngine::build_symbol_table(&lines_a, &lines_b);
 
-        assert_eq!(table.get("a"), Some(&(2, 0)));
-        assert_eq!(table.get("b"), Some(&(1, 1)));
-        assert_eq!(table.get("c"), Some(&(0, 1)));
+        assert_eq!(table.get(&lines_a[0]), Some(&(2, 0)));
+        assert_eq!(table.get(&lines_a[1]), Some(&(1, 1)));
+        assert_eq!(table.get(&lines_b[0]), Some(&(0, 1)));
         assert_eq!(table.len(), 3);
     }
 
     #[test]
     fn test_unique_anchor_linking() {
-        let lines_a = vec!["alpha".to_string(), "beta".to_string(), "gamma".to_string()];
-        let lines_b = vec![
-            "delta".to_string(),
-            "beta".to_string(),
-            "epsilon".to_string(),
-        ];
+        let lines_a = vec![same("alpha"), same("beta"), same("gamma")];
+        let lines_b = vec![same("delta"), same("beta"), same("epsilon")];
 
         let table = HeckelDiffEngine::build_symbol_table(&lines_a, &lines_b);
         let (oa, na) = HeckelDiffEngine::link_unique_anchors(&lines_a, &lines_b, &table);
@@ -544,8 +597,8 @@ mod tests {
 
     #[test]
     fn test_non_unique_matches_are_linked() {
-        let lines_a = vec!["foo".to_string(), "bar".to_string(), "foo".to_string()];
-        let lines_b = vec!["foo".to_string(), "foo".to_string(), "bar".to_string()];
+        let lines_a = vec![same("foo"), same("bar"), same("foo")];
+        let lines_b = vec![same("foo"), same("foo"), same("bar")];
 
         let table = HeckelDiffEngine::build_symbol_table(&lines_a, &lines_b);
         let (mut oa, mut na) = HeckelDiffEngine::link_unique_anchors(&lines_a, &lines_b, &table);
@@ -556,31 +609,39 @@ mod tests {
     }
 
     #[test]
-    fn test_unchanged_lines() {
+    fn test_compares_stripped_text_but_displays_original() {
         let engine = HeckelDiffEngine::new();
-        let lines_a = vec!["a".to_string(), "b".to_string(), "c".to_string()];
-        let lines_b = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let lines_a = vec![
+            comparable("[T1] line a", "line a"),
+            comparable("[T2] line b", "line b"),
+        ];
+        let lines_b = vec![
+            comparable("[T3] line a", "line a"),
+            comparable("[T4] line b", "line b"),
+        ];
 
         let result = engine.compute_diff(&lines_a, &lines_b);
 
-        // Validates [CSV-Tech-EncapsulationV1] accessor usage per [CSV-Tech-TraceabilityV1].
-        assert_eq!(result.lines().len(), 3);
-        assert!(
-            result
-                .lines()
-                .iter()
-                .all(|line| line.state() == DiffState::Unchanged)
-        );
-        assert_eq!(result.statistics().unchanged(), 3);
+        assert_eq!(result.statistics().unchanged(), 2);
         assert_eq!(result.statistics().total_changes(), 0);
         assert!(result.moved_blocks().is_empty());
+
+        let first = &result.lines()[0];
+        assert_eq!(first.state(), DiffState::Unchanged);
+        assert_eq!(first.left().unwrap().text(), "[T1] line a");
+        assert_eq!(first.right().unwrap().text(), "[T3] line a");
+
+        let second = &result.lines()[1];
+        assert_eq!(second.state(), DiffState::Unchanged);
+        assert_eq!(second.left().unwrap().text(), "[T2] line b");
+        assert_eq!(second.right().unwrap().text(), "[T4] line b");
     }
 
     #[test]
     fn test_simple_addition() {
         let engine = HeckelDiffEngine::new();
-        let lines_a = vec!["a".to_string(), "c".to_string()];
-        let lines_b = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let lines_a = vec![same("a"), same("c")];
+        let lines_b = vec![same("a"), same("b"), same("c")];
 
         let result = engine.compute_diff(&lines_a, &lines_b);
 
@@ -593,8 +654,8 @@ mod tests {
     #[test]
     fn test_simple_deletion() {
         let engine = HeckelDiffEngine::new();
-        let lines_a = vec!["a".to_string(), "b".to_string(), "c".to_string()];
-        let lines_b = vec!["a".to_string(), "c".to_string()];
+        let lines_a = vec![same("a"), same("b"), same("c")];
+        let lines_b = vec![same("a"), same("c")];
 
         let result = engine.compute_diff(&lines_a, &lines_b);
 
@@ -607,8 +668,8 @@ mod tests {
     #[test]
     fn test_simple_move() {
         let engine = HeckelDiffEngine::new();
-        let lines_a = vec!["a".to_string(), "b".to_string(), "c".to_string()];
-        let lines_b = vec!["c".to_string(), "a".to_string(), "b".to_string()];
+        let lines_a = vec![same("a"), same("b"), same("c")];
+        let lines_b = vec![same("c"), same("a"), same("b")];
 
         let result = engine.compute_diff(&lines_a, &lines_b);
 
