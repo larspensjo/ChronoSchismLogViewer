@@ -118,10 +118,10 @@ At this point, you will have a functional-but-basic application. You can load tw
 
 Now, build upon the working foundation to implement the more advanced visual features.
 
-1.  **Custom Diff View Control (`[CSV-UI-HighlightV1]`):**
+1.  **Custom Diff View Control (`[CSV-UI-HighlightV1]` + timestamp emphasis):**
     *   Instead of using two simple `Input` controls, you will need a custom-drawn control. The best approach is to enhance `CommanDuctUI` with a new `DiffView` control type.
     *   This control would internally handle the `WM_PAINT` message. Your `AppLogic` would send it a custom command like `PlatformCommand::SetDiffResults { control_id, results }`.
-    *   The control's handler would then iterate through the `DiffResult` and draw each line with the appropriate background color.
+    *   The control's handler would then iterate through the `DiffResult` and draw each line with the appropriate background color. While drawing unchanged or moved lines, highlight detected timestamp segments (e.g., with a yellow background wash) to satisfy the “timestamps stand out” UX idea.
 
 2.  **Linked Scrolling (`[CSV-UX-LinkedScrollV1]`):**
     *   In the `WndProc` for your custom `DiffView` control (or the main window), handle `WM_VSCROLL`.
@@ -142,3 +142,10 @@ Now, build upon the working foundation to implement the more advanced visual fea
         1.  On every `InputTextChanged` event, the `AppLogic` will also start or reset a short platform timer (e.g., 300ms).
         2.  When the timer fires, the `AppLogic` checks if the *current* regex is valid.
         3.  If it is, it proceeds with the full diffing workflow: stripping timestamps with the new pattern, re-computing the diff, and updating the viewer controls. the new pattern, re-computing the diff, and updating the viewer controls.
+
+5.  **Timestamp Pattern History Popup:**
+    *   Maintain a rolling history (size 5) of successful timestamp patterns in the presenter state.
+    *   When the timestamp input gains focus or the user invokes a dedicated command (e.g., a dropdown button next to the field), display a lightweight popup listing the recent patterns. Selecting one re-populates the input and retriggers validation/diffing.
+    *   This requires minor additions to the UI description (a trigger control) and to the event handling path to show/hide the popup and commit the selected pattern.
+    * This information shall be saved between sessions.
+
