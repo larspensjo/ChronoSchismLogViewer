@@ -567,7 +567,10 @@ mod tests {
         let line_c = comparable("[C] other", "other");
 
         assert_eq!(line_a, line_b, "Comparable text should drive equality");
-        assert_ne!(line_a, line_c, "Different comparable text must not be equal");
+        assert_ne!(
+            line_a, line_c,
+            "Different comparable text must not be equal"
+        );
     }
 
     #[test]

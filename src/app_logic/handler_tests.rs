@@ -6,8 +6,8 @@ mod tests {
         MENU_ACTION_OPEN_LEFT, MENU_ACTION_OPEN_RIGHT,
     };
     use crate::core::{
-        ComparableLine, DiffEngineOperations, DiffLine, DiffState, LineContent,
-        TimestampParserOperations,
+        AppSettings, ComparableLine, DiffEngineOperations, DiffLine, DiffState, LineContent,
+        SettingsManagerOperations, TimestampParserOperations,
     };
     use commanductui::types::{AppEvent, PlatformCommand, WindowId};
     use commanductui::{PlatformEventHandler, StyleId};
@@ -88,11 +88,45 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
+    struct MockSettingsManager {
+        saved: Mutex<Vec<(String, AppSettings)>>,
+        load_response: Mutex<AppSettings>,
+    }
+
+    impl MockSettingsManager {
+        fn saved_snapshots(&self) -> Vec<(String, AppSettings)> {
+            self.saved.lock().unwrap().clone()
+        }
+    }
+
+    impl SettingsManagerOperations for MockSettingsManager {
+        fn save_settings(
+            &self,
+            app_name: &str,
+            settings: &AppSettings,
+        ) -> Result<(), std::io::Error> {
+            self.saved
+                .lock()
+                .unwrap()
+                .push((app_name.to_string(), settings.clone()));
+            Ok(())
+        }
+
+        fn load_settings(&self, _app_name: &str) -> Result<AppSettings, std::io::Error> {
+            Ok(self.load_response.lock().unwrap().clone())
+        }
+    }
+
     fn snapshot(lines: &[ComparableLine]) -> Vec<(&str, &str)> {
         lines
             .iter()
             .map(|line| (line.original_text.as_str(), line.comparable_text.as_str()))
             .collect()
+    }
+
+    fn drain_commands(app_logic: &mut AppLogic) {
+        while app_logic.try_dequeue_command().is_some() {}
     }
 
     #[test]
@@ -114,10 +148,15 @@ mod tests {
 
         let diff_engine: Arc<dyn DiffEngineOperations> = mock_diff_engine.clone();
         let timestamp_parser: Arc<dyn TimestampParserOperations> = mock_timestamp_parser.clone();
-        let mut app_logic = AppLogic::new(diff_engine, timestamp_parser);
+        let settings_manager: Arc<dyn SettingsManagerOperations> =
+            Arc::new(MockSettingsManager::default());
+        let mut app_logic =
+            AppLogic::new(diff_engine, timestamp_parser, settings_manager, "test-app");
 
         let window_id = WindowId::new(7);
         app_logic.handle_event(AppEvent::MainWindowUISetupComplete { window_id });
+        // [CSV-Tech-SettingsPersistenceV1] Drain the initial input sync command produced by loading settings.
+        app_logic.try_dequeue_command();
 
         let (_temp_dir, left_path, right_path) = create_test_files();
 
@@ -245,10 +284,15 @@ mod tests {
 
         let diff_engine: Arc<dyn DiffEngineOperations> = mock_diff_engine.clone();
         let timestamp_parser: Arc<dyn TimestampParserOperations> = mock_timestamp_parser.clone();
-        let mut app_logic = AppLogic::new(diff_engine, timestamp_parser);
+        let settings_manager: Arc<dyn SettingsManagerOperations> =
+            Arc::new(MockSettingsManager::default());
+        let mut app_logic =
+            AppLogic::new(diff_engine, timestamp_parser, settings_manager, "test-app");
 
         let window_id = WindowId::new(42);
         app_logic.handle_event(AppEvent::MainWindowUISetupComplete { window_id });
+        // [CSV-Tech-SettingsPersistenceV1] Initial settings load syncs the input field.
+        app_logic.try_dequeue_command();
 
         // Invalid pattern should mark control with error style and skip diffing
         app_logic.handle_event(AppEvent::InputTextChanged {
@@ -376,5 +420,80 @@ mod tests {
         }
 
         (temp_dir, left_path, right_path)
+    }
+
+    #[test]
+    fn settings_persisted_on_quit_captures_recent_history() {
+        let diff_lines = vec![DiffLine::new(
+            DiffState::Unchanged,
+            Some(LineContent::new(1, "alpha")),
+            Some(LineContent::new(1, "alpha")),
+        )];
+        let mock_diff_engine = Arc::new(MockDiffEngine::new(diff_lines));
+        let mock_timestamp_parser = Arc::new(MockTimestampParser::default());
+        let settings_manager = Arc::new(MockSettingsManager::default());
+
+        let diff_engine: Arc<dyn DiffEngineOperations> = mock_diff_engine.clone();
+        let timestamp_parser: Arc<dyn TimestampParserOperations> = mock_timestamp_parser.clone();
+        let settings_arc: Arc<dyn SettingsManagerOperations> = settings_manager.clone();
+        let mut app_logic = AppLogic::new(diff_engine, timestamp_parser, settings_arc, "test-app");
+
+        let window_id = WindowId::new(101);
+        app_logic.handle_event(AppEvent::MainWindowUISetupComplete { window_id });
+        // [CSV-Tech-SettingsPersistenceV1] Settings load synchronizes UI state on startup.
+        drain_commands(&mut app_logic);
+
+        let (_temp_dir, left_path, right_path) = create_test_files();
+
+        app_logic.handle_event(AppEvent::MenuActionClicked {
+            action_id: MENU_ACTION_OPEN_LEFT,
+        });
+        let _ = app_logic.try_dequeue_command();
+        app_logic.handle_event(AppEvent::FileOpenProfileDialogCompleted {
+            window_id,
+            result: Some(left_path.clone()),
+        });
+        drain_commands(&mut app_logic);
+
+        app_logic.handle_event(AppEvent::MenuActionClicked {
+            action_id: MENU_ACTION_OPEN_RIGHT,
+        });
+        let _ = app_logic.try_dequeue_command();
+        app_logic.handle_event(AppEvent::FileOpenProfileDialogCompleted {
+            window_id,
+            result: Some(right_path.clone()),
+        });
+        drain_commands(&mut app_logic);
+
+        for pattern in ["one", "two", "three", "four", "five", "two", "six"] {
+            app_logic.handle_event(AppEvent::InputTextChanged {
+                window_id,
+                control_id: CONTROL_ID_TIMESTAMP_INPUT,
+                text: pattern.to_string(),
+            });
+            // [CSV-UX-TimestampHistoryV1] Valid pattern inputs update the MRU collection.
+            drain_commands(&mut app_logic);
+        }
+
+        PlatformEventHandler::on_quit(&mut app_logic);
+
+        let saved = settings_manager.saved_snapshots();
+        assert_eq!(saved.len(), 1, "expected a single persistence attempt");
+        let (app_name, snapshot) = &saved[0];
+        assert_eq!(app_name, "test-app");
+        assert_eq!(snapshot.left_file_path(), Some(&left_path));
+        assert_eq!(snapshot.right_file_path(), Some(&right_path));
+        assert_eq!(snapshot.timestamp_pattern(), "six");
+
+        let history: Vec<&str> = snapshot
+            .timestamp_history()
+            .iter()
+            .map(|entry| entry.as_str())
+            .collect();
+        assert_eq!(
+            history,
+            vec!["six", "two", "five", "four", "three"],
+            "history stores a five-entry MRU per [CSV-UX-TimestampHistoryV1]"
+        );
     }
 }

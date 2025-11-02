@@ -36,7 +36,11 @@ pub fn build_main_window_layout(window_id: WindowId) -> Vec<PlatformCommand> {
     commands.push(PlatformCommand::DefineStyle {
         style_id: StyleId::DefaultInputError,
         style: ControlStyle {
-            background_color: Some(Color { r: 0xB2, g: 0x1B, b: 0x1B }),
+            background_color: Some(Color {
+                r: 0xB2,
+                g: 0x1B,
+                b: 0x1B,
+            }),
             text_color: None,
             font: None,
         },

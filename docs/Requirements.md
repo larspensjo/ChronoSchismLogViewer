@@ -25,6 +25,7 @@ All requirements have a unique tag, in the form `[NameVn]`, where 'Vn' is the ve
 *   `[CSV-UX-LinkedScrollV1]` The vertical scroll bars of the two comparison panels must be linked, so that scrolling one panel scrolls the other in sync.
 *   `[CSV-UX-ResponsiveV1]` The application UI must remain responsive during file operations and diff calculations, making use of background processing where appropriate.
 *   `[CSV-UX-TimestampFeedbackV2]` The timestamp regex input shall show immediate validity feedback with a red background whenever the pattern is invalid or incomplete, and only trigger diff recalculation after a short debounce when the pattern becomes valid.
+*   `[CSV-UX-TimestampHistoryV1]` The application shall keep an MRU list of no more than five valid timestamp patterns to speed up reuse in future sessions.
 
 #### Technical Requirements
 *   `[CSV-Tech-RustV1]` The application shall be implemented in the Rust programming language.
@@ -38,3 +39,4 @@ All requirements have a unique tag, in the form `[NameVn]`, where 'Vn' is the ve
 *   `[CSV-Tech-TraceabilityV1]` Requirement identifiers shall appear in implementation comments and corresponding unit tests to aid traceability between code, tests, and documented requirements.
 *   `[CSV-Tech-ModuleStyleV1]` The project must follow the modern Rust module structure, where a module's declaration is placed in a file named after the module (e.g., `src/core.rs`) rather than in a `mod.rs` file inside the module's directory (e.g., `src/core/mod.rs`).
 *   `[CSV-Tech-LogFileV1]` The application shall initialize a file-based logger that records all `log` crate output to `ChronoSchismLogViewer.log` in the project directory.
+*   `[CSV-Tech-SettingsPersistenceV1]` The application shall persist the last-used file paths, timestamp pattern, and related UI state to a user-local configuration file and restore them on startup.

@@ -9,8 +9,8 @@ use crate::app_logic::ids::{
     MENU_ACTION_OPEN_LEFT, MENU_ACTION_OPEN_RIGHT,
 };
 use crate::core::{
-    ComparableLine, DiffEngineOperations, DiffLine, DiffState, LineContent, TimestampParserError,
-    TimestampParserOperations,
+    AppSettings, ComparableLine, DiffEngineOperations, DiffLine, DiffState, LineContent,
+    SettingsManagerOperations, TimestampParserError, TimestampParserOperations,
 };
 use commanductui::StyleId;
 use commanductui::types::{
@@ -30,13 +30,18 @@ enum PendingFileDialog {
     Right,
 }
 
+const MAX_TIMESTAMP_HISTORY: usize = 5; // [CSV-UX-TimestampHistoryV1] Limit recent patterns to a small MRU list.
+
 /// Presenter orchestrating file loading and diff requests per [CSV-Core-CompareV1].
 pub struct AppLogic {
     diff_engine: Arc<dyn DiffEngineOperations>,
     timestamp_parser: Arc<dyn TimestampParserOperations>,
+    settings_manager: Arc<dyn SettingsManagerOperations>,
+    app_identifier: String,
     left_file_path: Option<PathBuf>,
     right_file_path: Option<PathBuf>,
     timestamp_pattern: String,
+    timestamp_history: VecDeque<String>,
     diff_lines: Vec<DiffLine>,
     pending_commands: VecDeque<PlatformCommand>,
     active_window: Option<WindowId>,
@@ -49,13 +54,18 @@ impl AppLogic {
     pub fn new(
         diff_engine: Arc<dyn DiffEngineOperations>,
         timestamp_parser: Arc<dyn TimestampParserOperations>,
+        settings_manager: Arc<dyn SettingsManagerOperations>,
+        app_identifier: impl Into<String>,
     ) -> Self {
         Self {
             diff_engine,
             timestamp_parser,
+            settings_manager,
+            app_identifier: app_identifier.into(),
             left_file_path: None,
             right_file_path: None,
             timestamp_pattern: String::new(),
+            timestamp_history: VecDeque::new(),
             diff_lines: Vec::new(),
             pending_commands: VecDeque::new(),
             active_window: None,
@@ -126,7 +136,82 @@ impl AppLogic {
         self.timestamp_pattern = text;
         let is_valid = self.validate_timestamp_pattern();
         if is_valid {
+            self.record_timestamp_pattern_history();
             self.trigger_diff_if_ready();
+        }
+    }
+
+    fn record_timestamp_pattern_history(&mut self) {
+        // [CSV-UX-TimestampHistoryV1] Maintain a short MRU list of valid timestamp patterns.
+        let pattern = self.timestamp_pattern.clone();
+        if pattern.is_empty() {
+            return;
+        }
+
+        if let Some(pos) = self
+            .timestamp_history
+            .iter()
+            .position(|existing| existing == &pattern)
+        {
+            self.timestamp_history.remove(pos);
+        }
+        self.timestamp_history.push_front(pattern);
+
+        while self.timestamp_history.len() > MAX_TIMESTAMP_HISTORY {
+            self.timestamp_history.pop_back();
+        }
+    }
+
+    fn load_and_apply_settings(&mut self, window_id: WindowId) {
+        match self.settings_manager.load_settings(&self.app_identifier) {
+            Ok(settings) => {
+                log::info!("[CSV-Tech-SettingsPersistenceV1] Loaded persisted settings");
+                self.left_file_path = settings.left_file_path().cloned();
+                self.right_file_path = settings.right_file_path().cloned();
+                self.timestamp_pattern = settings.timestamp_pattern().to_string();
+                self.timestamp_history = settings.timestamp_history().clone();
+                while self.timestamp_history.len() > MAX_TIMESTAMP_HISTORY {
+                    self.timestamp_history.pop_back();
+                }
+                if !self.timestamp_pattern.is_empty()
+                    && !self
+                        .timestamp_history
+                        .iter()
+                        .any(|entry| entry == &self.timestamp_pattern)
+                {
+                    self.record_timestamp_pattern_history();
+                }
+
+                self.enqueue_command(PlatformCommand::SetInputText {
+                    window_id,
+                    control_id: CONTROL_ID_TIMESTAMP_INPUT,
+                    text: self.timestamp_pattern.clone(),
+                });
+
+                self.validate_timestamp_pattern();
+                self.trigger_diff_if_ready();
+            }
+            Err(err) => {
+                log::error!("[CSV-Tech-SettingsPersistenceV1] Failed to load settings: {err}");
+            }
+        }
+    }
+
+    fn persist_settings(&self) {
+        let snapshot = AppSettings::with_values(
+            self.left_file_path.clone(),
+            self.right_file_path.clone(),
+            self.timestamp_pattern.clone(),
+            self.timestamp_history.clone(),
+        );
+
+        if let Err(err) = self
+            .settings_manager
+            .save_settings(&self.app_identifier, &snapshot)
+        {
+            log::error!("[CSV-Tech-SettingsPersistenceV1] Failed to persist settings: {err}");
+        } else {
+            log::info!("[CSV-Tech-SettingsPersistenceV1] Persisted settings successfully");
         }
     }
 
@@ -188,10 +273,7 @@ impl AppLogic {
         Ok(diff_result.lines().to_vec())
     }
 
-    fn build_comparable_lines(
-        original: &[String],
-        stripped: &[String],
-    ) -> Vec<ComparableLine> {
+    fn build_comparable_lines(original: &[String], stripped: &[String]) -> Vec<ComparableLine> {
         debug_assert_eq!(original.len(), stripped.len());
         original
             .iter()
@@ -278,6 +360,7 @@ impl PlatformEventHandler for AppLogic {
         match event {
             AppEvent::MainWindowUISetupComplete { window_id } => {
                 self.active_window = Some(window_id);
+                self.load_and_apply_settings(window_id);
             }
             AppEvent::MenuActionClicked { action_id } => self.handle_menu_action(action_id),
             AppEvent::FileOpenProfileDialogCompleted { window_id, result } => {
@@ -293,6 +376,10 @@ impl PlatformEventHandler for AppLogic {
             }
             _ => {}
         }
+    }
+
+    fn on_quit(&mut self) {
+        self.persist_settings();
     }
 
     fn try_dequeue_command(&mut self) -> Option<PlatformCommand> {

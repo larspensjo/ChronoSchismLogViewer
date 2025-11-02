@@ -6,6 +6,9 @@ use time::macros::format_description;
 
 use ChronoSchismLogViewer::app_logic::handler::AppLogic;
 use ChronoSchismLogViewer::core::diff_engine::{DiffEngineOperations, HeckelDiffEngine};
+use ChronoSchismLogViewer::core::settings_manager::{
+    CoreSettingsManager, SettingsManagerOperations,
+};
 use ChronoSchismLogViewer::core::timestamp_parser::{
     CoreTimestampParser, TimestampParserOperations,
 };
@@ -31,8 +34,14 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     let diff_engine: Arc<dyn DiffEngineOperations> = Arc::new(HeckelDiffEngine::new());
     let timestamp_parser: Arc<dyn TimestampParserOperations> = Arc::new(CoreTimestampParser::new());
+    let settings_manager: Arc<dyn SettingsManagerOperations> = Arc::new(CoreSettingsManager::new());
 
-    let shared_logic = Arc::new(Mutex::new(AppLogic::new(diff_engine, timestamp_parser)));
+    let shared_logic = Arc::new(Mutex::new(AppLogic::new(
+        diff_engine,
+        timestamp_parser,
+        settings_manager,
+        APP_CLASS_NAME,
+    )));
 
     let event_handler: Arc<Mutex<dyn PlatformEventHandler>> = shared_logic.clone();
     let ui_state_provider: Arc<Mutex<dyn UiStateProvider>> = shared_logic;
