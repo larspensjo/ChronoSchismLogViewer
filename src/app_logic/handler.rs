@@ -47,6 +47,7 @@ pub struct AppLogic {
     active_window: Option<WindowId>,
     pending_file_dialog: Option<PendingFileDialog>,
     timestamp_pattern_is_valid: bool,
+    is_syncing_scroll: bool,
 }
 
 impl AppLogic {
@@ -71,6 +72,7 @@ impl AppLogic {
             active_window: None,
             pending_file_dialog: None,
             timestamp_pattern_is_valid: true,
+            is_syncing_scroll: false,
         }
     }
 
@@ -394,6 +396,35 @@ impl PlatformEventHandler for AppLogic {
             AppEvent::InputTextChanged {
                 control_id, text, ..
             } => self.handle_timestamp_input_changed(control_id, text),
+            AppEvent::ControlScrolled {
+                window_id,
+                control_id,
+                vertical_pos,
+                horizontal_pos: _,
+            } => {
+                if Some(window_id) != self.active_window || self.is_syncing_scroll {
+                    return;
+                }
+
+                let target_control_id = if control_id == CONTROL_ID_LEFT_VIEWER {
+                    Some(CONTROL_ID_RIGHT_VIEWER)
+                } else if control_id == CONTROL_ID_RIGHT_VIEWER {
+                    Some(CONTROL_ID_LEFT_VIEWER)
+                } else {
+                    None
+                };
+
+                if let Some(target_id) = target_control_id {
+                    self.is_syncing_scroll = true;
+                    self.enqueue_command(PlatformCommand::SetScrollPosition {
+                        window_id,
+                        control_id: target_id,
+                        vertical_pos,
+                        horizontal_pos: 0,
+                    });
+                    self.is_syncing_scroll = false;
+                }
+            }
             AppEvent::WindowCloseRequestedByUser { window_id } => {
                 if Some(window_id) == self.active_window {
                     // [CSV-UI-ExitCommandV1] Mirror File/Exit for the window close button.

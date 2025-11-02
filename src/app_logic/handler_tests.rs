@@ -515,6 +515,54 @@ mod tests {
     }
 
     #[test]
+    fn linked_scrolling_propagates_to_other_viewer() {
+        // Arrange
+        let mock_diff_engine = Arc::new(MockDiffEngine::new(vec![]));
+        let mock_timestamp_parser = Arc::new(MockTimestampParser::default());
+        let settings_manager = Arc::new(MockSettingsManager::default());
+
+        let diff_engine: Arc<dyn DiffEngineOperations> = mock_diff_engine.clone();
+        let timestamp_parser: Arc<dyn TimestampParserOperations> = mock_timestamp_parser.clone();
+        let settings_arc: Arc<dyn SettingsManagerOperations> = settings_manager.clone();
+
+        let mut app_logic = AppLogic::new(diff_engine, timestamp_parser, settings_arc, "test-app");
+        let window_id = WindowId::new(1);
+        app_logic.handle_event(AppEvent::MainWindowUISetupComplete { window_id });
+        drain_commands(&mut app_logic);
+
+        // Act
+        app_logic.handle_event(AppEvent::ControlScrolled {
+            window_id,
+            control_id: CONTROL_ID_LEFT_VIEWER,
+            vertical_pos: 50,
+            horizontal_pos: 0,
+        });
+
+        // Assert
+        let command = app_logic
+            .try_dequeue_command()
+            .expect("expected SetScrollPosition command");
+        match command {
+            PlatformCommand::SetScrollPosition {
+                control_id,
+                vertical_pos,
+                horizontal_pos,
+                ..
+            } => {
+                assert_eq!(control_id, CONTROL_ID_RIGHT_VIEWER);
+                assert_eq!(vertical_pos, 50);
+                assert_eq!(horizontal_pos, 0);
+            }
+            other => panic!("Unexpected command generated: {other:?}"),
+        }
+
+        assert!(
+            app_logic.try_dequeue_command().is_none(),
+            "only one command should be generated"
+        );
+    }
+
+    #[test]
     fn window_close_event_requests_shutdown() {
         let diff_lines = vec![DiffLine::new(
             DiffState::Unchanged,
