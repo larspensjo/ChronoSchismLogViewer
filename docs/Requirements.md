@@ -20,6 +20,7 @@ All requirements have a unique tag, in the form `[NameVn]`, where 'Vn' is the ve
 *   `[CSV-UI-HighlightV1]` Differences between the files must be visually indicated using color highlighting: one color for additions, one for deletions, and one for unchanged lines.
 *   `[CSV-UI-MovedBlocksV1]` Text blocks that have been moved must be visually indicated, for instance, by connecting their old and new locations with lines or bands.
 *   `[CSV-UI-TimestampInputV1]` There shall be a dedicated input field for the user to enter and apply a timestamp regex pattern.
+*   `[CSV-UI-ExitCommandV1]` The File menu shall expose an `Exit` command that gracefully shuts down the application, mirroring the main window close button behavior.
 
 #### User Experience (UX)
 *   `[CSV-UX-LinkedScrollV1]` The vertical scroll bars of the two comparison panels must be linked, so that scrolling one panel scrolls the other in sync.

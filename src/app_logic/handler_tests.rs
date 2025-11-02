@@ -3,7 +3,7 @@ mod tests {
     use crate::app_logic::handler::AppLogic;
     use crate::app_logic::ids::{
         CONTROL_ID_LEFT_VIEWER, CONTROL_ID_RIGHT_VIEWER, CONTROL_ID_TIMESTAMP_INPUT,
-        MENU_ACTION_OPEN_LEFT, MENU_ACTION_OPEN_RIGHT,
+        MENU_ACTION_EXIT, MENU_ACTION_OPEN_LEFT, MENU_ACTION_OPEN_RIGHT,
     };
     use crate::core::{
         AppSettings, ComparableLine, DiffEngineOperations, DiffLine, DiffState, LineContent,
@@ -127,6 +127,41 @@ mod tests {
 
     fn drain_commands(app_logic: &mut AppLogic) {
         while app_logic.try_dequeue_command().is_some() {}
+    }
+
+    fn load_files_and_pattern(
+        app_logic: &mut AppLogic,
+        window_id: WindowId,
+        left_path: &PathBuf,
+        right_path: &PathBuf,
+        pattern: &str,
+    ) {
+        app_logic.handle_event(AppEvent::MenuActionClicked {
+            action_id: MENU_ACTION_OPEN_LEFT,
+        });
+        let _ = app_logic.try_dequeue_command();
+        app_logic.handle_event(AppEvent::FileOpenProfileDialogCompleted {
+            window_id,
+            result: Some(left_path.clone()),
+        });
+        drain_commands(app_logic);
+
+        app_logic.handle_event(AppEvent::MenuActionClicked {
+            action_id: MENU_ACTION_OPEN_RIGHT,
+        });
+        let _ = app_logic.try_dequeue_command();
+        app_logic.handle_event(AppEvent::FileOpenProfileDialogCompleted {
+            window_id,
+            result: Some(right_path.clone()),
+        });
+        drain_commands(app_logic);
+
+        app_logic.handle_event(AppEvent::InputTextChanged {
+            window_id,
+            control_id: CONTROL_ID_TIMESTAMP_INPUT,
+            text: pattern.to_string(),
+        });
+        drain_commands(app_logic);
     }
 
     #[test]
@@ -420,6 +455,107 @@ mod tests {
         }
 
         (temp_dir, left_path, right_path)
+    }
+
+    #[test]
+    fn file_exit_menu_closes_window_and_persists_settings() {
+        let diff_lines = vec![DiffLine::new(
+            DiffState::Unchanged,
+            Some(LineContent::new(1, "alpha")),
+            Some(LineContent::new(1, "alpha")),
+        )];
+        let mock_diff_engine = Arc::new(MockDiffEngine::new(diff_lines));
+        let mock_timestamp_parser = Arc::new(MockTimestampParser::default());
+        let settings_manager = Arc::new(MockSettingsManager::default());
+
+        let diff_engine: Arc<dyn DiffEngineOperations> = mock_diff_engine.clone();
+        let timestamp_parser: Arc<dyn TimestampParserOperations> = mock_timestamp_parser.clone();
+        let settings_arc: Arc<dyn SettingsManagerOperations> = settings_manager.clone();
+        let mut app_logic = AppLogic::new(diff_engine, timestamp_parser, settings_arc, "test-app");
+
+        let window_id = WindowId::new(77);
+        app_logic.handle_event(AppEvent::MainWindowUISetupComplete { window_id });
+        drain_commands(&mut app_logic);
+
+        let (_temp_dir, left_path, right_path) = create_test_files();
+        load_files_and_pattern(&mut app_logic, window_id, &left_path, &right_path, ".*");
+
+        // [CSV-UI-ExitCommandV1] File/Exit should initiate shutdown.
+        app_logic.handle_event(AppEvent::MenuActionClicked {
+            action_id: MENU_ACTION_EXIT,
+        });
+
+        let close_command = app_logic
+            .try_dequeue_command()
+            .expect("expected CloseWindow command");
+        match close_command {
+            PlatformCommand::CloseWindow {
+                window_id: cmd_window,
+            } => assert_eq!(cmd_window, window_id),
+            other => panic!("unexpected command: {other:?}"),
+        }
+
+        let saved = settings_manager.saved_snapshots();
+        assert_eq!(saved.len(), 1, "exit should persist settings immediately");
+        let (app_name, snapshot) = &saved[0];
+        assert_eq!(app_name, "test-app");
+        assert_eq!(snapshot.left_file_path(), Some(&left_path));
+        assert_eq!(snapshot.right_file_path(), Some(&right_path));
+        assert_eq!(snapshot.timestamp_pattern(), ".*");
+        let history: Vec<&str> = snapshot
+            .timestamp_history()
+            .iter()
+            .map(|entry| entry.as_str())
+            .collect();
+        assert_eq!(
+            history,
+            vec![".*"],
+            "[CSV-UX-TimestampHistoryV1] exit preserves latest pattern history"
+        );
+    }
+
+    #[test]
+    fn window_close_event_requests_shutdown() {
+        let diff_lines = vec![DiffLine::new(
+            DiffState::Unchanged,
+            Some(LineContent::new(1, "alpha")),
+            Some(LineContent::new(1, "alpha")),
+        )];
+        let mock_diff_engine = Arc::new(MockDiffEngine::new(diff_lines));
+        let mock_timestamp_parser = Arc::new(MockTimestampParser::default());
+        let settings_manager = Arc::new(MockSettingsManager::default());
+
+        let diff_engine: Arc<dyn DiffEngineOperations> = mock_diff_engine.clone();
+        let timestamp_parser: Arc<dyn TimestampParserOperations> = mock_timestamp_parser.clone();
+        let settings_arc: Arc<dyn SettingsManagerOperations> = settings_manager.clone();
+        let mut app_logic = AppLogic::new(diff_engine, timestamp_parser, settings_arc, "test-app");
+
+        let window_id = WindowId::new(88);
+        app_logic.handle_event(AppEvent::MainWindowUISetupComplete { window_id });
+        drain_commands(&mut app_logic);
+
+        let (_temp_dir, left_path, right_path) = create_test_files();
+        load_files_and_pattern(&mut app_logic, window_id, &left_path, &right_path, "\\d+");
+
+        // [CSV-UI-ExitCommandV1] Closing via the window chrome should mirror File/Exit.
+        app_logic.handle_event(AppEvent::WindowCloseRequestedByUser { window_id });
+
+        let close_command = app_logic
+            .try_dequeue_command()
+            .expect("expected CloseWindow command on close request");
+        match close_command {
+            PlatformCommand::CloseWindow {
+                window_id: cmd_window,
+            } => assert_eq!(cmd_window, window_id),
+            other => panic!("unexpected command: {other:?}"),
+        }
+
+        let saved = settings_manager.saved_snapshots();
+        assert_eq!(saved.len(), 1, "close request should persist settings");
+        let snapshot = &saved[0].1;
+        assert_eq!(snapshot.left_file_path(), Some(&left_path));
+        assert_eq!(snapshot.right_file_path(), Some(&right_path));
+        assert_eq!(snapshot.timestamp_pattern(), "\\d+");
     }
 
     #[test]

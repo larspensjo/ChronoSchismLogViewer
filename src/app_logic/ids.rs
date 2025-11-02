@@ -11,3 +11,4 @@ pub const LABEL_TIMESTAMP_PROMPT: ControlId = ControlId::new(3_001);
 
 pub const MENU_ACTION_OPEN_LEFT: MenuActionId = MenuActionId(1);
 pub const MENU_ACTION_OPEN_RIGHT: MenuActionId = MenuActionId(2);
+pub const MENU_ACTION_EXIT: MenuActionId = MenuActionId(3);

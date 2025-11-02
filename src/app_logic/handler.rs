@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::app_logic::ids::{
-    CONTROL_ID_LEFT_VIEWER, CONTROL_ID_RIGHT_VIEWER, CONTROL_ID_TIMESTAMP_INPUT,
+    CONTROL_ID_LEFT_VIEWER, CONTROL_ID_RIGHT_VIEWER, CONTROL_ID_TIMESTAMP_INPUT, MENU_ACTION_EXIT,
     MENU_ACTION_OPEN_LEFT, MENU_ACTION_OPEN_RIGHT,
 };
 use crate::core::{
@@ -79,10 +79,15 @@ impl AppLogic {
     }
 
     fn handle_menu_action(&mut self, action_id: MenuActionId) {
-        if action_id == MENU_ACTION_OPEN_LEFT {
-            self.request_open_file_dialog(PendingFileDialog::Left);
-        } else if action_id == MENU_ACTION_OPEN_RIGHT {
-            self.request_open_file_dialog(PendingFileDialog::Right);
+        match action_id {
+            id if id == MENU_ACTION_OPEN_LEFT => {
+                self.request_open_file_dialog(PendingFileDialog::Left);
+            }
+            id if id == MENU_ACTION_OPEN_RIGHT => {
+                self.request_open_file_dialog(PendingFileDialog::Right);
+            }
+            id if id == MENU_ACTION_EXIT => self.request_exit(),
+            _ => {}
         }
     }
 
@@ -108,6 +113,14 @@ impl AppLogic {
             filter_spec: LOG_FILE_DIALOG_FILTER.to_string(),
             initial_dir,
         });
+    }
+
+    fn request_exit(&mut self) {
+        if let Some(window_id) = self.active_window {
+            // [CSV-UI-ExitCommandV1][CSV-Tech-SettingsPersistenceV1] Persist and request window closure on exit.
+            self.persist_settings();
+            self.enqueue_command(PlatformCommand::CloseWindow { window_id });
+        }
     }
 
     fn handle_file_dialog_result(&mut self, window_id: WindowId, result: Option<PathBuf>) {
@@ -369,6 +382,12 @@ impl PlatformEventHandler for AppLogic {
             AppEvent::InputTextChanged {
                 control_id, text, ..
             } => self.handle_timestamp_input_changed(control_id, text),
+            AppEvent::WindowCloseRequestedByUser { window_id } => {
+                if Some(window_id) == self.active_window {
+                    // [CSV-UI-ExitCommandV1] Mirror File/Exit for the window close button.
+                    self.request_exit();
+                }
+            }
             AppEvent::WindowDestroyed { window_id } => {
                 if Some(window_id) == self.active_window {
                     self.active_window = None;

@@ -1,7 +1,7 @@
 use crate::app_logic::ids::{
     CONTROL_ID_LEFT_VIEWER, CONTROL_ID_RIGHT_VIEWER, CONTROL_ID_TIMESTAMP_INPUT,
-    LABEL_TIMESTAMP_PROMPT, MENU_ACTION_OPEN_LEFT, MENU_ACTION_OPEN_RIGHT, PANEL_INPUT_BAR,
-    PANEL_VIEWER_CONTAINER,
+    LABEL_TIMESTAMP_PROMPT, MENU_ACTION_EXIT, MENU_ACTION_OPEN_LEFT, MENU_ACTION_OPEN_RIGHT,
+    PANEL_INPUT_BAR, PANEL_VIEWER_CONTAINER,
 };
 use commanductui::types::{
     DockStyle, LabelClass, LayoutRule, MenuItemConfig, PlatformCommand, WindowId,
@@ -21,6 +21,11 @@ pub fn build_main_window_layout(window_id: WindowId) -> Vec<PlatformCommand> {
         MenuItemConfig {
             action: Some(MENU_ACTION_OPEN_RIGHT),
             text: "Open &Right File...".to_string(),
+            children: Vec::new(),
+        },
+        MenuItemConfig {
+            action: Some(MENU_ACTION_EXIT),
+            text: "E&xit".to_string(),
             children: Vec::new(),
         },
     ];
