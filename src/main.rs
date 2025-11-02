@@ -1,6 +1,9 @@
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 
+use simplelog::{ConfigBuilder, LevelFilter, WriteLogger};
+use time::macros::format_description;
+
 use ChronoSchismLogViewer::app_logic::handler::AppLogic;
 use ChronoSchismLogViewer::core::diff_engine::{DiffEngineOperations, HeckelDiffEngine};
 use ChronoSchismLogViewer::core::timestamp_parser::{
@@ -22,10 +25,7 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
-    let _ = env_logger::builder()
-        .format_timestamp(None)
-        .format_target(false)
-        .try_init();
+    initialize_logging(LevelFilter::Debug);
 
     log::info!("Starting {APP_NAME}");
 
@@ -50,4 +50,37 @@ fn run() -> Result<(), Box<dyn Error>> {
     platform.main_event_loop(event_handler, ui_state_provider, layout_commands)?;
 
     Ok(())
+}
+
+// [CSV-Tech-LogFileV1]
+pub fn initialize_logging(log_level: LevelFilter) {
+    let log_file_path = "ChronoSchismLogViewer.log";
+    match std::fs::File::create(log_file_path) {
+        Ok(file) => {
+            let mut config_builder = ConfigBuilder::new();
+
+            if let Err(err) = config_builder.set_time_offset_to_local() {
+                eprintln!("Warning: Failed to set local time offset: {err:?}");
+            }
+
+            let config = config_builder
+                .set_thread_level(LevelFilter::Off)
+                .set_location_level(LevelFilter::Debug)
+                .set_time_format_custom(format_description!(
+                    "[hour]:[minute]:[second].[subsecond digits:3]"
+                ))
+                .build();
+
+            if let Err(err) =
+                simplelog::CombinedLogger::init(vec![WriteLogger::new(log_level, config, file)])
+            {
+                eprintln!("Failed to initialize file logger: {err}");
+            }
+        }
+        Err(err) => {
+            eprintln!("Failed to create log file '{log_file_path}': {err}");
+        }
+    }
+
+    println!("Logging initialized to file: {log_file_path}, at level {log_level}");
 }
