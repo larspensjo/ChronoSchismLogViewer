@@ -39,6 +39,19 @@ pub fn build_main_window_layout(window_id: WindowId) -> Vec<PlatformCommand> {
     let mut commands = Vec::new();
 
     commands.push(PlatformCommand::DefineStyle {
+        style_id: StyleId::DefaultInput,
+        style: ControlStyle {
+            background_color: Some(Color {
+                r: 0xFF,
+                g: 0xFF,
+                b: 0xFF,
+            }),
+            text_color: None,
+            font: None,
+        },
+    });
+
+    commands.push(PlatformCommand::DefineStyle {
         style_id: StyleId::DefaultInputError,
         style: ControlStyle {
             background_color: Some(Color {

@@ -146,6 +146,7 @@ impl AppLogic {
             return;
         }
 
+        log::debug!("[CSV-UX-TimestampFeedbackV2] Timestamp input changed to '{text}'");
         self.timestamp_pattern = text;
         let is_valid = self.validate_timestamp_pattern();
         if is_valid {
@@ -348,6 +349,12 @@ impl AppLogic {
         let is_valid = pattern.is_empty() || Regex::new(&pattern).is_ok();
 
         if is_valid != self.timestamp_pattern_is_valid {
+            log::debug!(
+                "[CSV-UX-TimestampFeedbackV2] Timestamp pattern validity toggled: prev={}, now={}, pattern='{}'",
+                self.timestamp_pattern_is_valid,
+                is_valid,
+                pattern
+            );
             self.timestamp_pattern_is_valid = is_valid;
             if let Some(window_id) = self.active_window {
                 // [CSV-UX-TimestampFeedbackV2] Keep the input styled to reflect regex validity.
@@ -356,6 +363,11 @@ impl AppLogic {
                 } else {
                     StyleId::DefaultInputError
                 };
+                log::debug!(
+                    "[CSV-UX-TimestampFeedbackV2] Applying style {:?} for window {:?}",
+                    style_id,
+                    window_id
+                );
                 self.enqueue_command(PlatformCommand::ApplyStyleToControl {
                     window_id,
                     control_id: CONTROL_ID_TIMESTAMP_INPUT,
